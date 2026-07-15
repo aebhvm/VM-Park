@@ -1,6 +1,6 @@
 export default async function handler(req: any, res: any) {
   try {
-    const { default: app } = await import('../server');
+    const { default: app } = await import('../server.js');
     return app(req, res);
   } catch (error) {
     console.error('Failed to initialize the ParkGestor API', error);

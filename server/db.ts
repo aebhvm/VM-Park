@@ -1,9 +1,9 @@
 import { neon } from '@neondatabase/serverless';
-import { 
+import type {
   User, VehicleType, PricingPlan, ParkingSession, 
   SubscriberPlan, Subscriber, CashSession, 
   FinancialTransaction, Expense, AuditLog 
-} from '../src/types';
+} from '../src/types.js';
 
 const STATE_ID = 'primary';
 

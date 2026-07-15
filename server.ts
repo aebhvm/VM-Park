@@ -1,9 +1,9 @@
 import express from 'express';
-import { getDb, saveDb, addAuditLog } from './server/db';
-import { 
+import { getDb, saveDb, addAuditLog } from './server/db.js';
+import type {
   ParkingSession, CashSession, FinancialTransaction, 
   Subscriber, Expense, PricingPlan 
-} from './src/types';
+} from './src/types.js';
 
 const app = express();
 

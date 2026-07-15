@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 const port = Number(process.env.PORT || 3000);
 dotenv.config({ path: '.env.local', quiet: true });
 
-const { default: app } = await import('./server');
+const { default: app } = await import('./server.js');
 
 const vite = await createViteServer({
   server: { middlewareMode: true },
