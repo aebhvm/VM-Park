@@ -1,15 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { api, getActiveUserId, setActiveUserId } from './lib/api';
 import { User, VehicleType, ParkingSession, SubscriberPlan, Subscriber, CashSession, Expense, AuditLog } from './types';
 import Navigation from './components/Navigation';
-import Dashboard from './components/Dashboard';
-import NewEntry from './components/NewEntry';
-import ActiveSessions from './components/ActiveSessions';
-import CashRegister from './components/CashRegister';
-import Subscribers from './components/Subscribers';
-import AdminConfig from './components/AdminConfig';
-import Login from './components/Login';
 import { RefreshCw, AlertCircle } from 'lucide-react';
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const NewEntry = lazy(() => import('./components/NewEntry'));
+const ActiveSessions = lazy(() => import('./components/ActiveSessions'));
+const CashRegister = lazy(() => import('./components/CashRegister'));
+const Subscribers = lazy(() => import('./components/Subscribers'));
+const AdminConfig = lazy(() => import('./components/AdminConfig'));
+const Login = lazy(() => import('./components/Login'));
+
+function ScreenLoader() {
+  return <div className="py-16 text-center text-xs font-bold uppercase tracking-widest text-app-muted">Carregando módulo...</div>;
+}
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -190,13 +195,15 @@ export default function App() {
   // If not logged in and users are loaded, render the Login screen!
   if (!isLoggedIn && users.length > 0) {
     return (
-      <Login 
-        users={users} 
-        onLoginSuccess={(userId) => {
-          handleUserChange(userId);
-          setIsLoggedIn(true);
-        }} 
-      />
+      <Suspense fallback={<ScreenLoader />}>
+        <Login 
+          users={users} 
+          onLoginSuccess={(userId) => {
+            handleUserChange(userId);
+            setIsLoggedIn(true);
+          }} 
+        />
+      </Suspense>
     );
   }
 
@@ -243,6 +250,7 @@ export default function App() {
       {/* Main Body container */}
       <div className="flex-1 flex flex-col">
         <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full">
+          <Suspense fallback={<ScreenLoader />}>
           {currentUser && (
             <>
               {currentTab === 'dashboard' && (
@@ -341,6 +349,7 @@ export default function App() {
               )}
             </>
           )}
+          </Suspense>
         </main>
       </div>
     </div>
