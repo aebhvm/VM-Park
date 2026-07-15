@@ -1,5 +1,4 @@
 import express from 'express';
-import dotenv from 'dotenv';
 import { getDb, saveDb, addAuditLog } from './server/db';
 import { 
   ParkingSession, CashSession, FinancialTransaction, 
@@ -7,10 +6,6 @@ import {
 } from './src/types';
 
 const app = express();
-
-if (!process.env.VERCEL) {
-  dotenv.config({ path: '.env.local', quiet: true });
-}
 
 app.use(express.json());
 

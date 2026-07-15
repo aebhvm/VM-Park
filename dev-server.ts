@@ -1,7 +1,10 @@
 import { createServer as createViteServer } from 'vite';
-import app from './server';
+import dotenv from 'dotenv';
 
 const port = Number(process.env.PORT || 3000);
+dotenv.config({ path: '.env.local', quiet: true });
+
+const { default: app } = await import('./server');
 
 const vite = await createViteServer({
   server: { middlewareMode: true },
