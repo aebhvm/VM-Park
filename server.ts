@@ -1,6 +1,4 @@
 import express from 'express';
-import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { getDb, saveDb, addAuditLog } from './server/db';
 import { 
@@ -9,7 +7,6 @@ import {
 } from './src/types';
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
 
 if (!process.env.VERCEL) {
   dotenv.config({ path: '.env.local', quiet: true });
@@ -900,54 +897,5 @@ app.get('/api/dashboard/stats', async (req, res) => {
     dailyRevenuesChart
   });
 });
-
-// Vercel imports this file as a serverless function. The local development
-// process remains responsible for serving the Vite application.
-if (!process.env.VERCEL && process.env.NODE_ENV !== "production") {
-  createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  }).then((vite) => {
-    app.use(vite.middlewares);
-    
-    // Fallback for SPA routing in development
-    app.get('*', (req, res, next) => {
-      // Don't intercept API routes
-      if (req.path.startsWith('/api')) return next();
-      
-      vite.transformIndexHtml(req.url, `
-        <!doctype html>
-        <html lang="pt-BR">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>ParkGestor - Sistema de Gestão para Estacionamento</title>
-          </head>
-          <body>
-            <div id="root"></div>
-            <script type="module" src="/src/main.tsx"></script>
-          </body>
-        </html>
-      `).then((html) => {
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
-      }).catch(next);
-    });
-    
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Development server running on http://localhost:${PORT}`);
-    });
-  });
-} else if (!process.env.VERCEL) {
-  const distPath = path.join(process.cwd(), 'dist');
-  app.use(express.static(distPath));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API endpoint not found' });
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-  
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Production server running on http://localhost:${PORT}`);
-  });
-}
 
 export default app;
