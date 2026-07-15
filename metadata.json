@@ -1,0 +1,6 @@
+{
+  "name": "VM Park",
+  "description": "Sistema de Gestão para Estacionamento com controle de fluxo, caixa, mensalistas e relatórios financeiros.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

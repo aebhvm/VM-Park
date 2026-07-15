@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* DEFAULT THEME: Modern Light Mode SaaS (Esmeralda) */
+  --color-bg-base: #F8FAFC; /* Slate 50 */
+  --color-bg-card: #FFFFFF; /* Pure White */
+  --color-border-main: #E2E8F0; /* Slate 200 */
+  --color-border-sub: #F1F5F9; /* Slate 100 */
+  --color-text-main: #0F172A; /* Slate 900 */
+  --color-text-muted: #475569; /* Slate 600 */
+  --color-text-subtle: #64748B; /* Slate 500 */
+  --font-active: var(--font-sans);
+  --font-title-active: var(--font-display);
+  --theme-uppercase: normal-case;
+  --theme-tracking: normal;
+  --theme-radius: 12px;
+  --theme-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -2px rgba(0, 0, 0, 0.02), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="obsidian"] {
+  /* obsidian: Professional Deep Dark Theme */
+  --color-bg-base: #0B0F19; /* Deep Navy Charcoal */
+  --color-bg-card: #111827; /* Slate 900 */
+  --color-border-main: #1F2937; /* Slate 800 */
+  --color-border-sub: #374151; /* Slate 700 */
+  --color-text-main: #F9FAFB; /* Gray 50 */
+  --color-text-muted: #9CA3AF; /* Gray 400 */
+  --color-text-subtle: #6B7280; /* Gray 500 */
+  --font-active: var(--font-sans);
+  --font-title-active: var(--font-display);
+  --theme-uppercase: normal-case;
+  --theme-tracking: normal;
+  --theme-radius: 10px;
+  --theme-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="cyber"] {
+  /* cyber: Retro Cybernetic Terminal Monospace Theme */
+  --color-bg-base: #0B0E14;
+  --color-bg-card: #0F172A;
+  --color-border-main: #1E293B;
+  --color-border-sub: #1E293B;
+  --color-text-main: #CBD5E1;
+  --color-text-muted: #64748B;
+  --color-text-subtle: #475569;
+  --font-active: var(--font-mono);
+  --font-title-active: var(--font-mono);
+  --theme-uppercase: uppercase;
+  --theme-tracking: tracking-wider;
+  --theme-radius: 4px;
+  --theme-shadow: none;
+}
+
+@theme {
+  --color-app-bg: var(--color-bg-base);
+  --color-app-card: var(--color-bg-card);
+  --color-app-border: var(--color-border-main);
+  --color-app-border-sub: var(--color-border-sub);
+  --color-app-text: var(--color-text-main);
+  --color-app-muted: var(--color-text-muted);
+  --color-app-subtle: var(--color-text-subtle);
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Brand overrides: redefine indigo to map perfectly to Villa Mayor's forest green */
+  --color-indigo-50: #F3F7F6;
+  --color-indigo-100: #E4EFEF;
+  --color-indigo-200: #C2DAD6;
+  --color-indigo-300: #93BEB6;
+  --color-indigo-400: #629E93;
+  --color-indigo-500: #1E4E44; /* Primary Deep Green */
+  --color-indigo-600: #1A443B; /* Slightly darker brand green */
+  --color-indigo-700: #153831;
+  --color-indigo-800: #112C26;
+  --color-indigo-900: #0C1E1B;
+  --color-indigo-950: #060F0D;
+
+  /* Brand gold/sandy beige from logo */
+  --color-gold-50: #F9F7F4;
+  --color-gold-100: #F0EDE5;
+  --color-gold-200: #DDD6C5;
+  --color-gold-300: #C5B08E; /* Brand Sand/Gold */
+  --color-gold-400: #B79C73;
+  --color-gold-500: #A2855B;
+  --color-gold-600: #886C47;
+  --color-gold-700: #6B5236;
+  --color-gold-800: #513E2A;
+  --color-gold-900: #392B1D;
+  --color-gold-950: #201810;
+}
+
+body {
+  font-family: var(--font-active);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-main);
+  transition: background-color 0.2s ease, color 0.2s ease, font-family 0.15s ease;
+}
+
+/* Scrollbar styling responsive to theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-main);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-subtle);
+}
+
+/* Custom theme overrides to cleanly style native items */
+.theme-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-main);
+  box-shadow: var(--theme-shadow);
+  border-radius: var(--theme-radius);
+  transition: all 0.2s ease;
+}
+
+.theme-font-title {
+  font-family: var(--font-title-active);
+}
+
+.theme-uppercase {
+  text-transform: var(--theme-uppercase);
+  letter-spacing: var(--theme-tracking);
+}
