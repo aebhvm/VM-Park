@@ -4,6 +4,7 @@ import {
   Plus, Minus, X, AlertTriangle, FileText, Check, Calendar, RefreshCw 
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatBRL, formatCurrencyInput, formatCurrencyValue, parseCurrency } from '../lib/masks';
 import { CashSession, FinancialTransaction } from '../types';
 import { motion } from 'motion/react';
 
@@ -23,7 +24,7 @@ export default function CashRegister({
   currentUser
 }: CashRegisterProps) {
   // Opening form state
-  const [openingBalance, setOpeningBalance] = useState('100');
+  const [openingBalance, setOpeningBalance] = useState(formatCurrencyValue(100));
   const [openLoading, setOpenLoading] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -41,16 +42,12 @@ export default function CashRegister({
   const [closingLoading, setClosingLoading] = useState(false);
   const [closingError, setClosingError] = useState<string | null>(null);
 
-  const formatBRL = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  };
-
   const handleOpenCash = async (e: React.FormEvent) => {
     e.preventDefault();
     setOpenLoading(true);
     setOpenError(null);
     try {
-      await api.openCash(parseFloat(openingBalance || '0'));
+      await api.openCash(parseCurrency(openingBalance));
       onRefresh();
     } catch (err: any) {
       setOpenError(err.message || 'Erro ao abrir caixa.');
@@ -61,7 +58,7 @@ export default function CashRegister({
 
   const handlePostTxn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!txnAmount || parseFloat(txnAmount) <= 0) {
+    if (!txnAmount || parseCurrency(txnAmount) <= 0) {
       setTxnError('Insira um valor maior que zero.');
       return;
     }
@@ -75,7 +72,7 @@ export default function CashRegister({
     try {
       await api.addCashTransaction({
         type: actionType!,
-        amount: parseFloat(txnAmount),
+        amount: parseCurrency(txnAmount),
         description: txnDesc
       });
       setActionType(null);
@@ -96,7 +93,7 @@ export default function CashRegister({
       return;
     }
 
-    const countedVal = parseFloat(informedClosingVal);
+    const countedVal = parseCurrency(informedClosingVal);
     const expectedVal = cashStatus ? cashStatus.expectedClosingBalance : 0;
     const difference = countedVal - expectedVal;
 
@@ -195,11 +192,10 @@ export default function CashRegister({
               <div className="space-y-1">
                 <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">FUNDO DE TROCO INICIAL (R$)</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="5"
+                  type="text"
+                  inputMode="decimal"
                   value={openingBalance}
-                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  onChange={(e) => setOpeningBalance(formatCurrencyInput(e.target.value))}
                   className="w-full bg-app-bg text-center text-lg font-mono font-bold py-2 border border-app-border text-app-text focus:border-indigo-500 focus:outline-none rounded"
                   required
                 />
@@ -426,13 +422,12 @@ export default function CashRegister({
               <div className="space-y-1">
                 <label className="font-bold text-app-muted uppercase block tracking-widest text-[9px]">VALOR DA OPERAÇÃO (R$)</label>
                 <input
-                  type="number"
-                  min="1"
-                  step="0.5"
+                  type="text"
+                  inputMode="decimal"
                   value={txnAmount}
-                  onChange={(e) => setTxnAmount(e.target.value)}
+                  onChange={(e) => setTxnAmount(formatCurrencyInput(e.target.value))}
                   className="w-full bg-app-card border border-app-border text-app-text font-mono font-bold rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-                  placeholder="EX: 50.00"
+                  placeholder="R$ 0,00"
                   required
                 />
               </div>
@@ -528,13 +523,12 @@ export default function CashRegister({
               <div className="space-y-1">
                 <label className="font-bold text-app-muted uppercase block tracking-widest text-[9px]">VALOR FÍSICO CONTADO (R$)</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.5"
+                  type="text"
+                  inputMode="decimal"
                   value={informedClosingVal}
-                  onChange={(e) => setInformedClosingVal(e.target.value)}
+                  onChange={(e) => setInformedClosingVal(formatCurrencyInput(e.target.value))}
                   className="w-full bg-app-card border border-app-border text-app-text font-mono font-bold rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 text-center text-sm"
-                  placeholder="0.00"
+                  placeholder="R$ 0,00"
                   required
                 />
               </div>
@@ -542,19 +536,19 @@ export default function CashRegister({
               {/* Difference Preview calculation */}
               {informedClosingVal !== '' && (
                 <div className={`p-2.5 rounded border text-[9px] flex items-center gap-2 uppercase ${
-                  parseFloat(informedClosingVal) - cashStatus.expectedClosingBalance === 0 
+                  parseCurrency(informedClosingVal) - cashStatus.expectedClosingBalance === 0
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
                     : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
                 }`}>
                   <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
                   <div>
-                    {parseFloat(informedClosingVal) - cashStatus.expectedClosingBalance === 0 ? (
+                    {parseCurrency(informedClosingVal) - cashStatus.expectedClosingBalance === 0 ? (
                       <span><strong>CONFERÊNCIA FECHADA!</strong> O VALOR INFORMADO BATE PERFEITAMENTE COM O SISTEMA.</span>
                     ) : (
                       <span>
                         <strong>DIVERGÊNCIA DETECTADA:</strong> HÁ UMA DIFERENÇA DE{' '}
                         <strong className="underline">
-                          {formatBRL(parseFloat(informedClosingVal) - cashStatus.expectedClosingBalance)}
+                          {formatBRL(parseCurrency(informedClosingVal) - cashStatus.expectedClosingBalance)}
                         </strong>. DESCREVA O MOTIVO NA CAIXA ABAIXO.
                       </span>
                     )}
@@ -563,7 +557,7 @@ export default function CashRegister({
               )}
 
               {/* Justification input if there is a difference */}
-              {informedClosingVal !== '' && parseFloat(informedClosingVal) - cashStatus.expectedClosingBalance !== 0 && (
+              {informedClosingVal !== '' && parseCurrency(informedClosingVal) - cashStatus.expectedClosingBalance !== 0 && (
                 <div className="space-y-1">
                   <label className="font-bold text-app-muted uppercase block tracking-widest text-[9px]">JUSTIFICATIVA DA DIVERGÊNCIA</label>
                   <textarea

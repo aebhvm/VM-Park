@@ -4,6 +4,7 @@ import {
   Copy, CheckCircle2, AlertCircle, Info, RefreshCw 
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatPlate, isValidPlate, normalizePlate } from '../lib/masks';
 import { VehicleType, Subscriber } from '../types';
 import { motion } from 'motion/react';
 
@@ -48,36 +49,25 @@ export default function NewEntry({
 
   // Plate normalizer for real-time validation
   const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    
-    // Simple cap for standard plates
-    if (rawVal.length <= 8) {
-      setPlate(rawVal);
-      
-      // Look up subscriber
-      const matched = subscribers.find(sub => 
-        sub.plates.some(p => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === rawVal)
-      );
-      
-      if (matched) {
-        setMatchedSub(matched);
-        if (matched.status === 'active') {
-          setEntryType('mensalista');
-        }
-      } else {
-        setMatchedSub(null);
-        if (entryType === 'mensalista') {
-          setEntryType('avulso');
-        }
+    const formattedPlate = formatPlate(e.target.value);
+    const normalizedPlate = normalizePlate(formattedPlate);
+    setPlate(formattedPlate);
+
+    const matched = subscribers.find(sub =>
+      sub.plates.some(subscriberPlate => normalizePlate(subscriberPlate) === normalizedPlate)
+    );
+
+    if (matched && normalizedPlate.length === 7) {
+      setMatchedSub(matched);
+      if (matched.status === 'active') {
+        setEntryType('mensalista');
+      }
+    } else {
+      setMatchedSub(null);
+      if (entryType === 'mensalista') {
+        setEntryType('avulso');
       }
     }
-  };
-
-  const getDisplayPlate = (p: string) => {
-    if (p.length === 7) {
-      return `${p.substring(0, 3)}-${p.substring(3)}`;
-    }
-    return p;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,8 +76,8 @@ export default function NewEntry({
       setError('A placa do veículo é obrigatória.');
       return;
     }
-    if (plate.length < 5) {
-      setError('A placa informada está muito curta.');
+    if (!isValidPlate(plate)) {
+      setError('Informe uma placa válida no formato ABC-1234 ou ABC1D23.');
       return;
     }
     
@@ -96,7 +86,7 @@ export default function NewEntry({
     
     try {
       const response = await api.registerEntry({
-        plate,
+        plate: normalizePlate(plate),
         vehicleTypeId: selectedTypeId,
         color,
         model,
@@ -122,7 +112,7 @@ export default function NewEntry({
   COMPROVANTE DE ENTRADA
 ----------------------------
 TICKET: ${createdTicket.ticketNumber}
-PLACA: ${createdTicket.displayPlate}
+PLACA: ${formatPlate(createdTicket.displayPlate)}
 MODELO: ${createdTicket.model || 'Não informado'}
 ENTRADA: ${new Date(createdTicket.entryAt).toLocaleDateString('pt-BR')} ${new Date(createdTicket.entryAt).toLocaleTimeString('pt-BR')}
 VAGA: ${createdTicket.vaga || 'Livre'}
@@ -179,7 +169,7 @@ Conserve este ticket para a saída.
               </div>
               <div className="flex justify-between text-xs">
                 <span>PLACA:</span>
-                <span className="font-bold text-app-text bg-app-border px-1 rounded">{createdTicket.displayPlate}</span>
+                <span className="font-bold text-app-text bg-app-border px-1 rounded">{formatPlate(createdTicket.displayPlate)}</span>
               </div>
               <div className="flex justify-between">
                 <span>CATEGORIA:</span>
@@ -292,13 +282,16 @@ Conserve este ticket para a saída.
               value={plate}
               onChange={handlePlateChange}
               placeholder="ABC1D23 OU KLM-9920"
+              maxLength={8}
+              autoCapitalize="characters"
+              spellCheck={false}
               className="w-full bg-app-bg text-center text-lg uppercase font-bold tracking-widest px-4 py-2 border border-app-border text-app-text focus:border-indigo-500 focus:outline-none rounded transition placeholder-app-muted/30"
               autoFocus
               required
             />
             {plate && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold px-1 py-0.5 rounded bg-app-border text-app-muted">
-                {plate.length} / 7
+                {normalizePlate(plate).length} / 7
               </span>
             )}
           </div>

@@ -1,5 +1,12 @@
 import express from 'express';
 import { getDb, saveDb, addAuditLog } from './server/db.js';
+import {
+  formatPlate,
+  isValidPlate,
+  normalizeDocument,
+  normalizePhone,
+  normalizePlate
+} from './src/lib/masks.js';
 import type {
   ParkingSession, CashSession, FinancialTransaction, 
   Subscriber, Expense, PricingPlan 
@@ -76,7 +83,11 @@ app.put('/api/config', async (req, res) => {
   
   const db = await getDb();
   const oldConfig = { ...db.parkingLotConfig };
-  db.parkingLotConfig = { ...db.parkingLotConfig, ...req.body };
+  const configUpdates = { ...req.body };
+  if (configUpdates.document !== undefined) configUpdates.document = normalizeDocument(configUpdates.document);
+  if (configUpdates.phone !== undefined) configUpdates.phone = normalizePhone(configUpdates.phone);
+  if (configUpdates.lgpdDpoPhone !== undefined) configUpdates.lgpdDpoPhone = normalizePhone(configUpdates.lgpdDpoPhone);
+  db.parkingLotConfig = { ...db.parkingLotConfig, ...configUpdates };
   await saveDb(db);
   
   await addAuditLog(user.id, user.name, 'Atualizou Configurações do Estacionamento', 'Estacionamento', 'config', oldConfig, db.parkingLotConfig);
@@ -149,7 +160,10 @@ app.post('/api/lgpd/anonymize', async (req, res) => {
     return res.status(400).json({ error: 'É necessário fornecer a placa para exclusão de dados.' });
   }
   
-  const cleanPlate = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const cleanPlate = normalizePlate(plate);
+  if (!isValidPlate(cleanPlate)) {
+    return res.status(400).json({ error: 'Informe uma placa válida no formato ABC-1234 ou ABC1D23.' });
+  }
   
   let count = 0;
   db.parkingSessions = db.parkingSessions.map(session => {
@@ -174,13 +188,13 @@ app.post('/api/lgpd/anonymize', async (req, res) => {
   
   if (count > 0) {
     await saveDb(db);
-    await addAuditLog(user.id, user.name, `Expurgou/Anonimizou Dados da Placa [${plate.toUpperCase()}]`, 'LGPD', 'anonymization', null, { plateAnonymized: plate.toUpperCase(), count }, `Solicitação de exclusão sob Art. 16 da LGPD.`);
+    await addAuditLog(user.id, user.name, `Expurgou/Anonimizou Dados da Placa [${formatPlate(cleanPlate)}]`, 'LGPD', 'anonymization', null, { plateAnonymized: cleanPlate, count }, `Solicitação de exclusão sob Art. 16 da LGPD.`);
   }
   
   res.json({ 
     success: true, 
     count, 
-    message: `${count} registro(s) históricos de permanência da placa ${plate.toUpperCase()} foram devidamente anonimizados em conformidade com o Art. 16 da LGPD.` 
+    message: `${count} registro(s) históricos de permanência da placa ${formatPlate(cleanPlate)} foram devidamente anonimizados em conformidade com o Art. 16 da LGPD.`
   });
 });
 
@@ -253,10 +267,11 @@ app.post('/api/parking/entry', async (req, res) => {
     return res.status(400).json({ error: 'Placa e Tipo de Veículo são obrigatórios.' });
   }
   
-  const normalizedPlate = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const displayPlate = normalizedPlate.length === 7 
-    ? `${normalizedPlate.substring(0, 3)}-${normalizedPlate.substring(3)}` 
-    : normalizedPlate;
+  const normalizedPlate = normalizePlate(plate);
+  if (!isValidPlate(normalizedPlate)) {
+    return res.status(400).json({ error: 'Informe uma placa válida no formato ABC-1234 ou ABC1D23.' });
+  }
+  const displayPlate = formatPlate(normalizedPlate);
     
   // RN-01: One active session per plate in same lot
   const hasActive = db.parkingSessions.some(s => s.normalizedPlate === normalizedPlate && s.status === 'active');
@@ -270,7 +285,7 @@ app.post('/api/parking/entry', async (req, res) => {
   
   // Look up plate in subscribers
   matchedSubscriber = db.subscribers.find(sub => 
-    sub.plates.some(p => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === normalizedPlate)
+    sub.plates.some(p => normalizePlate(p) === normalizedPlate)
   );
   
   if (matchedSubscriber) {
@@ -612,6 +627,19 @@ app.post('/api/subscribers', async (req, res) => {
   if (!name || !phone || !planId || !plates || plates.length === 0) {
     return res.status(400).json({ error: 'Nome, Telefone, Plano e Placas são obrigatórios.' });
   }
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedDocument = normalizeDocument(document);
+  const normalizedPlates = plates.map((plateValue: string) => normalizePlate(plateValue));
+  if (normalizedPhone.length !== 10 && normalizedPhone.length !== 11) {
+    return res.status(400).json({ error: 'Informe um telefone com DDD válido.' });
+  }
+  if (normalizedDocument && normalizedDocument.length !== 11 && normalizedDocument.length !== 14) {
+    return res.status(400).json({ error: 'Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.' });
+  }
+  if (normalizedPlates.some((plateValue: string) => !isValidPlate(plateValue))) {
+    return res.status(400).json({ error: 'Informe placas válidas nos formatos ABC-1234 ou ABC1D23.' });
+  }
   
   const plan = db.subscriberPlans.find(p => p.id === planId);
   if (!plan) return res.status(404).json({ error: 'Plano não encontrado.' });
@@ -625,8 +653,8 @@ app.post('/api/subscribers', async (req, res) => {
   const newSubscriber: Subscriber = {
     id: `sub-${Date.now()}`,
     name,
-    document,
-    phone,
+    document: normalizedDocument,
+    phone: normalizedPhone,
     email: email || '',
     planId,
     startsAt,
@@ -634,7 +662,7 @@ app.post('/api/subscribers', async (req, res) => {
     dueDay: parseInt(dueDay || 10),
     status: 'active',
     amount: plan.amount,
-    plates: plates.map((p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase()),
+    plates: normalizedPlates,
     notes,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -654,12 +682,26 @@ app.put('/api/subscribers/:id', async (req, res) => {
   if (!sub) return res.status(404).json({ error: 'Mensalista não encontrado.' });
   
   const oldSub = { ...sub };
-  Object.assign(sub, req.body);
-  
-  // Standardize plates if changed
-  if (req.body.plates) {
-    sub.plates = req.body.plates.map((p: string) => p.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
+  const subscriberUpdates = { ...req.body };
+  if (subscriberUpdates.document !== undefined) {
+    subscriberUpdates.document = normalizeDocument(subscriberUpdates.document);
+    if (subscriberUpdates.document && subscriberUpdates.document.length !== 11 && subscriberUpdates.document.length !== 14) {
+      return res.status(400).json({ error: 'Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.' });
+    }
   }
+  if (subscriberUpdates.phone !== undefined) {
+    subscriberUpdates.phone = normalizePhone(subscriberUpdates.phone);
+    if (subscriberUpdates.phone.length !== 10 && subscriberUpdates.phone.length !== 11) {
+      return res.status(400).json({ error: 'Informe um telefone com DDD válido.' });
+    }
+  }
+  if (subscriberUpdates.plates) {
+    subscriberUpdates.plates = subscriberUpdates.plates.map((plateValue: string) => normalizePlate(plateValue));
+    if (subscriberUpdates.plates.some((plateValue: string) => !isValidPlate(plateValue))) {
+      return res.status(400).json({ error: 'Informe placas válidas nos formatos ABC-1234 ou ABC1D23.' });
+    }
+  }
+  Object.assign(sub, subscriberUpdates);
   
   sub.updatedAt = new Date().toISOString();
   await saveDb(db);

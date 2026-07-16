@@ -4,6 +4,7 @@ import {
   X, Printer, QrCode, Trash2, Coins, Calendar, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { formatBRL, formatCurrencyInput, formatCurrencyValue, formatPlate, normalizeSearchText, parseCurrency } from '../lib/masks';
 import { ParkingSession, VehicleType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -35,7 +36,7 @@ export default function ActiveSessions({
   const [calculationData, setCalculationData] = useState<any | null>(null);
   const [loadingCalc, setLoadingCalc] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'dinheiro' | 'pix' | 'debito' | 'credito'>('dinheiro');
-  const [discountVal, setDiscountVal] = useState<string>('0');
+  const [discountVal, setDiscountVal] = useState<string>(formatCurrencyValue(0));
   const [customFinalVal, setCustomFinalVal] = useState<string>('');
   const [justification, setJustification] = useState('');
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -58,10 +59,10 @@ export default function ActiveSessions({
 
   // Filter and search active sessions
   const filteredSessions = activeParked.filter(s => {
-    const displayPlate = s.displayPlate || '';
-    const ticketNum = s.ticketNumber || '';
-    const matchesQuery = displayPlate.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         ticketNum.toLowerCase().includes(searchQuery.toLowerCase());
+    const query = normalizeSearchText(searchQuery);
+    const displayPlate = normalizeSearchText(s.displayPlate || '');
+    const ticketNum = normalizeSearchText(s.ticketNumber || '');
+    const matchesQuery = displayPlate.includes(query) || ticketNum.includes(query);
                          
     const matchesType = filterType === 'all' || s.vehicleTypeId === filterType;
     
@@ -93,16 +94,12 @@ export default function ActiveSessions({
     return `${minutes}m`;
   };
 
-  const formatBRL = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  };
-
   // Trigger cost calculation on selecting a session for checkout
   const handleSelectCheckout = async (session: ParkingSession) => {
     setCheckoutSession(session);
     setLoadingCalc(true);
     setCheckoutError(null);
-    setDiscountVal('0');
+    setDiscountVal(formatCurrencyValue(0));
     setCustomFinalVal('');
     setJustification('');
     setPaymentMethod('dinheiro');
@@ -122,8 +119,8 @@ export default function ActiveSessions({
     if (!checkoutSession || !calculationData) return;
     
     // Validate justification if discount or price override is used
-    const parsedDiscount = parseFloat(discountVal || '0');
-    const overrideFinal = customFinalVal !== '' ? parseFloat(customFinalVal) : null;
+    const parsedDiscount = parseCurrency(discountVal);
+    const overrideFinal = customFinalVal !== '' ? parseCurrency(customFinalVal) : null;
     const isOverriding = parsedDiscount > 0 || overrideFinal !== null || checkoutSession.entryType === 'cortesia';
     
     if (isOverriding && !justification.trim()) {
@@ -179,11 +176,11 @@ export default function ActiveSessions({
   const getFinalCalculatedPrices = () => {
     if (!calculationData) return { calculated: 0, final: 0, discount: 0 };
     const original = calculationData.calculatedAmount;
-    let disc = parseFloat(discountVal || '0');
+    let disc = parseCurrency(discountVal);
     let fin = Math.max(0, original - disc);
     
     if (customFinalVal !== '') {
-      fin = parseFloat(customFinalVal);
+      fin = parseCurrency(customFinalVal);
       disc = Math.max(0, original - fin);
     }
     return {
@@ -308,7 +305,7 @@ export default function ActiveSessions({
                     <div>
                       <span className="text-[9px] font-bold text-app-subtle tracking-wider font-mono">TICKET: {s.ticketNumber}</span>
                       <h4 className="text-base font-bold text-app-text mt-0.5 tracking-wider uppercase">
-                        {s.displayPlate}
+                        {formatPlate(s.displayPlate)}
                       </h4>
                       {s.model && (
                         <p className="text-[9px] text-app-muted truncate mt-0.5 uppercase">
@@ -408,7 +405,7 @@ export default function ActiveSessions({
                 <p className="text-[8px] text-app-subtle mt-0.5">Nº: {ticketModalSession.ticketNumber}</p>
               </div>
               <div className="space-y-1 text-left text-app-muted">
-                <p className="flex justify-between"><span>PLACA:</span> <strong className="text-app-text bg-app-border px-1 rounded font-bold">{ticketModalSession.displayPlate}</strong></p>
+                <p className="flex justify-between"><span>PLACA:</span> <strong className="text-app-text bg-app-border px-1 rounded font-bold">{formatPlate(ticketModalSession.displayPlate)}</strong></p>
                 <p className="flex justify-between"><span>MODALIDADE:</span> <strong className="uppercase text-indigo-500">{ticketModalSession.entryType}</strong></p>
                 <p className="flex justify-between"><span>ENTRADA:</span> <strong className="text-app-text">{new Date(ticketModalSession.entryAt).toLocaleDateString('pt-BR')} {new Date(ticketModalSession.entryAt).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</strong></p>
                 <p className="flex justify-between"><span>OPERADOR:</span> <strong className="text-app-text uppercase">{currentUser.name.split(' ')[0]}</strong></p>
@@ -478,7 +475,7 @@ export default function ActiveSessions({
 
                 <div className="p-3 bg-app-card rounded border border-dashed border-app-border text-left space-y-1 text-[10px] font-mono">
                   <p className="flex justify-between"><span>TICKET:</span> <strong className="text-app-text">{checkoutSuccessTicket.ticketNumber}</strong></p>
-                  <p className="flex justify-between"><span>PLACA:</span> <strong className="text-app-text bg-app-bg px-1 rounded">{checkoutSuccessTicket.displayPlate}</strong></p>
+                  <p className="flex justify-between"><span>PLACA:</span> <strong className="text-app-text bg-app-bg px-1 rounded">{formatPlate(checkoutSuccessTicket.displayPlate)}</strong></p>
                   <p className="flex justify-between"><span>ENTRADA:</span> <span className="text-app-text">{new Date(checkoutSuccessTicket.entryAt).toLocaleTimeString('pt-BR')}</span></p>
                   <p className="flex justify-between"><span>SAÍDA:</span> <span className="text-app-text">{new Date(checkoutSuccessTicket.exitAt).toLocaleTimeString('pt-BR')}</span></p>
                   <p className="flex justify-between border-t border-dashed border-app-border pt-1.5 text-xs">
@@ -512,7 +509,7 @@ export default function ActiveSessions({
                 <div className="bg-app-card p-3 rounded border border-app-border flex justify-between items-start">
                   <div>
                     <span className="text-[8px] text-app-muted font-bold uppercase tracking-wider font-mono">TICKET ID: {checkoutSession.ticketNumber}</span>
-                    <h5 className="text-sm font-bold text-app-text tracking-wider mt-0.5">{checkoutSession.displayPlate}</h5>
+                    <h5 className="text-sm font-bold text-app-text tracking-wider mt-0.5">{formatPlate(checkoutSession.displayPlate)}</h5>
                     {checkoutSession.model && <p className="text-[9px] text-app-muted uppercase mt-0.5">{checkoutSession.model}</p>}
                     <p className="text-[8px] text-app-subtle mt-1 uppercase font-mono font-bold">ENTRADA EM {new Date(checkoutSession.entryAt).toLocaleString('pt-BR')}</p>
                   </div>
@@ -567,12 +564,11 @@ export default function ActiveSessions({
                           <div className="flex justify-between items-center text-app-muted">
                             <span>Abatimento Manual (R$):</span>
                             <input
-                              type="number"
-                              min="0"
-                              step="0.5"
+                              type="text"
+                              inputMode="decimal"
                               value={discountVal}
                               onChange={(e) => {
-                                  setDiscountVal(e.target.value);
+                                  setDiscountVal(formatCurrencyInput(e.target.value));
                                   setCustomFinalVal('');
                               }}
                               className="w-16 bg-app-bg border border-app-border text-app-text rounded px-1.5 py-0.5 text-right font-bold text-[10px] focus:outline-none focus:border-indigo-500 font-mono"
@@ -582,14 +578,13 @@ export default function ActiveSessions({
                           <div className="flex justify-between items-center text-app-muted">
                             <span>Sobrescrever Total Final (R$):</span>
                             <input
-                              type="number"
-                              min="0"
-                              step="0.5"
+                              type="text"
+                              inputMode="decimal"
                               value={customFinalVal}
-                              placeholder="EX: 5.00"
+                              placeholder="R$ 0,00"
                               onChange={(e) => {
-                                  setCustomFinalVal(e.target.value);
-                                  setDiscountVal('0');
+                                  setCustomFinalVal(formatCurrencyInput(e.target.value));
+                                  setDiscountVal(formatCurrencyValue(0));
                               }}
                               className="w-16 bg-app-bg border border-app-border text-app-text rounded px-1.5 py-0.5 text-right font-bold text-[10px] focus:outline-none focus:border-indigo-500 placeholder-app-muted/30 font-mono"
                             />
@@ -698,7 +693,7 @@ export default function ActiveSessions({
             
             <div className="p-4 space-y-3 bg-app-bg text-app-muted">
               <p className="leading-relaxed">
-                VOCÊ ESTÁ PRESTES A CANCELAR A ENTRADA DO VEÍCULO PLACA <strong className="text-app-text font-bold">{cancelSession.displayPlate}</strong> (TICKET: {cancelSession.ticketNumber}). ESTA AÇÃO É IRREVERSÍVEL, LIBERARÁ A VAGA DO PÁTIO E DEIXARÁ REGISTRO DE AUDITORIA INTERNA.
+                VOCÊ ESTÁ PRESTES A CANCELAR A ENTRADA DO VEÍCULO PLACA <strong className="text-app-text font-bold">{formatPlate(cancelSession.displayPlate)}</strong> (TICKET: {cancelSession.ticketNumber}). ESTA AÇÃO É IRREVERSÍVEL, LIBERARÁ A VAGA DO PÁTIO E DEIXARÁ REGISTRO DE AUDITORIA INTERNA.
               </p>
 
               <div className="space-y-1">

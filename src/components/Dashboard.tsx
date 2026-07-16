@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
   CartesianGrid, Tooltip, Legend 
 } from 'recharts';
+import { formatBRL } from '../lib/masks';
 
 interface DashboardProps {
   stats: any;
@@ -24,11 +25,6 @@ export default function Dashboard({ stats, loading, onRefresh, setCurrentTab }: 
       </div>
     );
   }
-
-  // Format currencies to BRL
-  const formatBRL = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
 
   const getOccupancyColor = (percentage: number) => {
     if (percentage >= 90) return 'bg-red-500';
@@ -284,7 +280,7 @@ export default function Dashboard({ stats, loading, onRefresh, setCurrentTab }: 
               <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={9} tickLine={false} />
               <YAxis stroke="var(--color-text-muted)" fontSize={9} tickLine={false} />
               <Tooltip 
-                formatter={(value: any) => [`R$ ${parseFloat(value).toFixed(2)}`]}
+                formatter={(value: any) => [formatBRL(Number(value))]}
                 contentStyle={{ 
                   backgroundColor: 'var(--color-bg-card)', 
                   borderColor: 'var(--color-border-main)', 

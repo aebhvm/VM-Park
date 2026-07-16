@@ -4,6 +4,18 @@ import {
   Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X 
 } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  formatCpfCnpj,
+  formatCurrencyInput,
+  formatCurrencyValue,
+  formatPhone,
+  formatPlate,
+  isValidPlate,
+  normalizeDocument,
+  normalizePhone,
+  normalizePlate,
+  parseCurrency
+} from '../lib/masks';
 import { User, Expense, AuditLog } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -34,8 +46,8 @@ export default function AdminConfig({
 
   // --- SUBTAB 1: Configuration state ---
   const [lotName, setLotName] = useState(parkingConfig?.name || '');
-  const [lotDoc, setLotDoc] = useState(parkingConfig?.document || '');
-  const [lotPhone, setLotPhone] = useState(parkingConfig?.phone || '');
+  const [lotDoc, setLotDoc] = useState(formatCpfCnpj(parkingConfig?.document || ''));
+  const [lotPhone, setLotPhone] = useState(formatPhone(parkingConfig?.phone || ''));
   const [lotAddress, setLotAddress] = useState(parkingConfig?.address || '');
   const [lotSpaces, setLotSpaces] = useState(parkingConfig?.totalSpaces?.toString() || '90');
   const [lotTolerance, setLotTolerance] = useState(parkingConfig?.toleranceMinutes?.toString() || '15');
@@ -44,22 +56,22 @@ export default function AdminConfig({
   const [configError, setConfigError] = useState<string | null>(null);
 
   // --- SUBTAB NEW: Tariffs & Plan states ---
-  const [carHourly, setCarHourly] = useState(() => pricingPlans?.find(p => p.id === 'plan-car')?.hourlyRate?.toString() || '8.00');
+  const [carHourly, setCarHourly] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-car')?.hourlyRate ?? 8));
   const [carTolerance, setCarTolerance] = useState(() => pricingPlans?.find(p => p.id === 'plan-car')?.toleranceMinutes?.toString() || '15');
-  const [carDailyMax, setCarDailyMax] = useState(() => pricingPlans?.find(p => p.id === 'plan-car')?.dailyMax?.toString() || '45.00');
+  const [carDailyMax, setCarDailyMax] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-car')?.dailyMax ?? 45));
 
-  const [motoHourly, setMotoHourly] = useState(() => pricingPlans?.find(p => p.id === 'plan-moto')?.hourlyRate?.toString() || '4.00');
+  const [motoHourly, setMotoHourly] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-moto')?.hourlyRate ?? 4));
   const [motoTolerance, setMotoTolerance] = useState(() => pricingPlans?.find(p => p.id === 'plan-moto')?.toleranceMinutes?.toString() || '15');
-  const [motoDailyMax, setMotoDailyMax] = useState(() => pricingPlans?.find(p => p.id === 'plan-moto')?.dailyMax?.toString() || '25.00');
+  const [motoDailyMax, setMotoDailyMax] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-moto')?.dailyMax ?? 25));
 
-  const [truckHourly, setTruckHourly] = useState(() => pricingPlans?.find(p => p.id === 'plan-truck')?.hourlyRate?.toString() || '12.00');
+  const [truckHourly, setTruckHourly] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-truck')?.hourlyRate ?? 12));
   const [truckTolerance, setTruckTolerance] = useState(() => pricingPlans?.find(p => p.id === 'plan-truck')?.toleranceMinutes?.toString() || '15');
-  const [truckDailyMax, setTruckDailyMax] = useState(() => pricingPlans?.find(p => p.id === 'plan-truck')?.dailyMax?.toString() || '60.00');
+  const [truckDailyMax, setTruckDailyMax] = useState(() => formatCurrencyValue(pricingPlans?.find(p => p.id === 'plan-truck')?.dailyMax ?? 60));
 
-  const [subCarAmount, setSubCarAmount] = useState(() => subscriberPlans?.find(p => p.id === 'sub-plan-car')?.amount?.toString() || '180.00');
+  const [subCarAmount, setSubCarAmount] = useState(() => formatCurrencyValue(subscriberPlans?.find(p => p.id === 'sub-plan-car')?.amount ?? 180));
   const [subCarLimit, setSubCarLimit] = useState(() => subscriberPlans?.find(p => p.id === 'sub-plan-car')?.simultaneousLimit?.toString() || '1');
 
-  const [subMotoAmount, setSubMotoAmount] = useState(() => subscriberPlans?.find(p => p.id === 'sub-plan-moto')?.amount?.toString() || '90.00');
+  const [subMotoAmount, setSubMotoAmount] = useState(() => formatCurrencyValue(subscriberPlans?.find(p => p.id === 'sub-plan-moto')?.amount ?? 90));
   const [subMotoLimit, setSubMotoLimit] = useState(() => subscriberPlans?.find(p => p.id === 'sub-plan-moto')?.simultaneousLimit?.toString() || '1');
 
   const [tariffsLoading, setTariffsLoading] = useState(false);
@@ -70,7 +82,7 @@ export default function AdminConfig({
   const [lgpdTerm, setLgpdTerm] = useState(parkingConfig?.lgpdTerm || 'Os dados de placa e veículo são coletados estritamente para controle operacional e faturamento de permanência, sob amparo legal de execução de contrato e legítimo interesse (Art. 7º, V e IX da Lei 13.709/18). Os registros históricos são retidos temporariamente e anonimizados após o prazo regulatório de faturamento.');
   const [lgpdDpoName, setLgpdDpoName] = useState(parkingConfig?.lgpdDpoName || 'Renata Souza (Gerente)');
   const [lgpdDpoEmail, setLgpdDpoEmail] = useState(parkingConfig?.lgpdDpoEmail || 'dpo@parkgestor.com.br');
-  const [lgpdDpoPhone, setLgpdDpoPhone] = useState(parkingConfig?.lgpdDpoPhone || '(85) 3224-8899');
+  const [lgpdDpoPhone, setLgpdDpoPhone] = useState(formatPhone(parkingConfig?.lgpdDpoPhone || '(85) 3224-8899'));
   const [lgpdMaskPlatesOld, setLgpdMaskPlatesOld] = useState(parkingConfig?.lgpdMaskPlatesOld !== false);
   const [lgpdMaskDays, setLgpdMaskDays] = useState(parkingConfig?.lgpdMaskDays?.toString() || '30');
   const [lgpdConsentRequired, setLgpdConsentRequired] = useState(parkingConfig?.lgpdConsentRequired !== false);
@@ -116,8 +128,8 @@ export default function AdminConfig({
       await api.updateConfig({
         ...parkingConfig,
         name: lotName,
-        document: lotDoc,
-        phone: lotPhone,
+        document: normalizeDocument(lotDoc),
+        phone: normalizePhone(lotPhone),
         address: lotAddress,
         totalSpaces: parseInt(lotSpaces),
         toleranceMinutes: parseInt(lotTolerance)
@@ -141,30 +153,30 @@ export default function AdminConfig({
       await Promise.all([
         api.updatePricingPlan({
           id: 'plan-car',
-          hourlyRate: parseFloat(carHourly),
+          hourlyRate: parseCurrency(carHourly),
           toleranceMinutes: parseInt(carTolerance, 10),
-          dailyMax: parseFloat(carDailyMax)
+          dailyMax: parseCurrency(carDailyMax)
         }),
         api.updatePricingPlan({
           id: 'plan-moto',
-          hourlyRate: parseFloat(motoHourly),
+          hourlyRate: parseCurrency(motoHourly),
           toleranceMinutes: parseInt(motoTolerance, 10),
-          dailyMax: parseFloat(motoDailyMax)
+          dailyMax: parseCurrency(motoDailyMax)
         }),
         api.updatePricingPlan({
           id: 'plan-truck',
-          hourlyRate: parseFloat(truckHourly),
+          hourlyRate: parseCurrency(truckHourly),
           toleranceMinutes: parseInt(truckTolerance, 10),
-          dailyMax: parseFloat(truckDailyMax)
+          dailyMax: parseCurrency(truckDailyMax)
         }),
         api.updateSubscriberPlan({
           id: 'sub-plan-car',
-          amount: parseFloat(subCarAmount),
+          amount: parseCurrency(subCarAmount),
           simultaneousLimit: parseInt(subCarLimit, 10)
         }),
         api.updateSubscriberPlan({
           id: 'sub-plan-moto',
-          amount: parseFloat(subMotoAmount),
+          amount: parseCurrency(subMotoAmount),
           simultaneousLimit: parseInt(subMotoLimit, 10)
         })
       ]);
@@ -189,7 +201,7 @@ export default function AdminConfig({
         lgpdTerm,
         lgpdDpoName,
         lgpdDpoEmail,
-        lgpdDpoPhone,
+        lgpdDpoPhone: normalizePhone(lgpdDpoPhone),
         lgpdMaskPlatesOld,
         lgpdMaskDays: parseInt(lgpdMaskDays, 10),
         lgpdConsentRequired
@@ -206,14 +218,18 @@ export default function AdminConfig({
 
   const handleErasureSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!erasurePlate.trim()) return;
+    if (!isValidPlate(erasurePlate)) {
+      setErasureError('Informe uma placa válida no formato ABC-1234 ou ABC1D23.');
+      return;
+    }
     setErasureLoading(true);
     setErasureError(null);
     setErasureResult(null);
     try {
-      const res = await api.anonymizePlate(erasurePlate);
+      const normalizedPlate = normalizePlate(erasurePlate);
+      const res = await api.anonymizePlate(normalizedPlate);
       if (res.count === 0) {
-        setErasureError(`Nenhum registro histórico finalizado foi encontrado para a placa "${erasurePlate.toUpperCase()}". Verifique se o veículo possui permanência em aberto ou se digitou corretamente.`);
+        setErasureError(`Nenhum registro histórico finalizado foi encontrado para a placa "${formatPlate(normalizedPlate)}". Verifique se o veículo possui permanência em aberto ou se digitou corretamente.`);
       } else {
         setErasureResult(res.message);
         setErasurePlate('');
@@ -228,7 +244,7 @@ export default function AdminConfig({
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseDesc.trim() || !expenseAmount || parseFloat(expenseAmount) <= 0) {
+    if (!expenseDesc.trim() || !expenseAmount || parseCurrency(expenseAmount) <= 0) {
       setExpenseError('Descreva o motivo e insira um valor válido para a despesa.');
       return;
     }
@@ -240,7 +256,7 @@ export default function AdminConfig({
       await api.createExpense({
         category: expenseCategory,
         description: expenseDesc,
-        amount: parseFloat(expenseAmount),
+        amount: parseCurrency(expenseAmount),
         expenseDate,
         supplier: expenseSupplier || undefined,
         payFromCash
@@ -369,7 +385,9 @@ export default function AdminConfig({
                   <input
                     type="text"
                     value={lotDoc}
-                    onChange={(e) => setLotDoc(e.target.value)}
+                    onChange={(e) => setLotDoc(formatCpfCnpj(e.target.value))}
+                    inputMode="numeric"
+                    maxLength={18}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
                     required
                   />
@@ -378,9 +396,11 @@ export default function AdminConfig({
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TELEFONE GERAL CONTATO *</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={lotPhone}
-                    onChange={(e) => setLotPhone(e.target.value)}
+                    onChange={(e) => setLotPhone(formatPhone(e.target.value))}
+                    inputMode="tel"
+                    maxLength={15}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
                     required
                   />
@@ -474,10 +494,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">VALOR DA HORA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={carHourly}
-                        onChange={(e) => setCarHourly(e.target.value)}
+                        onChange={(e) => setCarHourly(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -495,10 +515,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">LIMITE DIÁRIA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={carDailyMax}
-                        onChange={(e) => setCarDailyMax(e.target.value)}
+                        onChange={(e) => setCarDailyMax(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -511,10 +531,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">VALOR DA HORA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={motoHourly}
-                        onChange={(e) => setMotoHourly(e.target.value)}
+                        onChange={(e) => setMotoHourly(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -532,10 +552,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">LIMITE DIÁRIA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={motoDailyMax}
-                        onChange={(e) => setMotoDailyMax(e.target.value)}
+                        onChange={(e) => setMotoDailyMax(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -548,10 +568,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">VALOR DA HORA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={truckHourly}
-                        onChange={(e) => setTruckHourly(e.target.value)}
+                        onChange={(e) => setTruckHourly(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -569,10 +589,10 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">LIMITE DIÁRIA (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={truckDailyMax}
-                        onChange={(e) => setTruckDailyMax(e.target.value)}
+                        onChange={(e) => setTruckDailyMax(formatCurrencyInput(e.target.value))}
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                         required
                       />
@@ -601,10 +621,10 @@ export default function AdminConfig({
                       <div className="space-y-1 w-24">
                         <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">VALOR MENSAL</label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={subCarAmount}
-                          onChange={(e) => setSubCarAmount(e.target.value)}
+                          onChange={(e) => setSubCarAmount(formatCurrencyInput(e.target.value))}
                           className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                           required
                         />
@@ -632,10 +652,10 @@ export default function AdminConfig({
                       <div className="space-y-1 w-24">
                         <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">VALOR MENSAL</label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={subMotoAmount}
-                          onChange={(e) => setSubMotoAmount(e.target.value)}
+                          onChange={(e) => setSubMotoAmount(formatCurrencyInput(e.target.value))}
                           className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-center"
                           required
                         />
@@ -782,9 +802,11 @@ export default function AdminConfig({
                       <div className="space-y-1">
                         <label className="text-[8px] font-bold text-app-muted uppercase block">TELEFONE DO DPO</label>
                         <input
-                          type="text"
+                          type="tel"
                           value={lgpdDpoPhone}
-                          onChange={(e) => setLgpdDpoPhone(e.target.value)}
+                          onChange={(e) => setLgpdDpoPhone(formatPhone(e.target.value))}
+                          inputMode="tel"
+                          maxLength={15}
                           className="w-full bg-app-card border border-app-border text-app-text rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono"
                           required
                         />
@@ -838,9 +860,12 @@ export default function AdminConfig({
                     <label className="text-[8px] font-bold text-app-muted uppercase block">PLACA DO VEÍCULO DO TITULAR</label>
                     <input
                       type="text"
-                      placeholder="EX: ABC1D23"
+                      placeholder="EX: ABC-1234 OU ABC1D23"
                       value={erasurePlate}
-                      onChange={(e) => setErasurePlate(e.target.value)}
+                      onChange={(e) => setErasurePlate(formatPlate(e.target.value))}
+                      maxLength={8}
+                      autoCapitalize="characters"
+                      spellCheck={false}
                       className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-rose-500 text-center font-mono text-sm font-bold uppercase placeholder-app-muted/30"
                       required
                     />
@@ -922,11 +947,11 @@ export default function AdminConfig({
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">VALOR SAÍDA (R$)*</label>
                       <input
-                        type="number"
-                        step="0.10"
+                        type="text"
+                        inputMode="decimal"
                         value={expenseAmount}
-                        onChange={(e) => setExpenseAmount(e.target.value)}
-                        placeholder="0.00"
+                        onChange={(e) => setExpenseAmount(formatCurrencyInput(e.target.value))}
+                        placeholder="R$ 0,00"
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 font-mono text-center font-bold"
                         required
                       />

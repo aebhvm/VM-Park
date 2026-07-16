@@ -5,6 +5,18 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Subscriber, SubscriberPlan } from '../types';
+import {
+  formatCpfCnpj,
+  formatPhone,
+  formatPlate,
+  formatPlateList,
+  getDocumentLabel,
+  isValidPlate,
+  normalizeDocument,
+  normalizePhone,
+  normalizePlate,
+  normalizeSearchText
+} from '../lib/masks';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface SubscribersProps {
@@ -65,10 +77,11 @@ export default function Subscribers({
   };
 
   const filteredSubscribers = subscribers.filter(s => {
-    const matchesQuery = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         s.phone.includes(searchQuery) ||
-                         (s.document && s.document.includes(searchQuery)) ||
-                         s.plates.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()));
+    const normalizedQuery = normalizeSearchText(searchQuery);
+    const matchesQuery = normalizeSearchText(s.name).includes(normalizedQuery) ||
+                         normalizeSearchText(s.phone).includes(normalizedQuery) ||
+                         (s.document && normalizeSearchText(s.document).includes(normalizedQuery)) ||
+                         s.plates.some(p => normalizeSearchText(p).includes(normalizedQuery));
 
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
 
@@ -102,14 +115,29 @@ export default function Subscribers({
       return;
     }
 
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedDocument = normalizeDocument(document);
+    const platesArray = plates.split(',').map(normalizePlate).filter(Boolean);
+    if (normalizedPhone.length !== 10 && normalizedPhone.length !== 11) {
+      setCreateError('Informe um telefone com DDD válido.');
+      return;
+    }
+    if (normalizedDocument && normalizedDocument.length !== 11 && normalizedDocument.length !== 14) {
+      setCreateError('Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.');
+      return;
+    }
+    if (platesArray.some(plateValue => !isValidPlate(plateValue))) {
+      setCreateError('Informe placas válidas nos formatos ABC-1234 ou ABC1D23.');
+      return;
+    }
+
     setCreateLoading(true);
     setCreateError(null);
     try {
-      const platesArray = plates.split(',').map(p => p.trim()).filter(Boolean);
       await api.createSubscriber({
         name,
-        document,
-        phone,
+        document: normalizedDocument,
+        phone: normalizedPhone,
         email,
         planId,
         plates: platesArray,
@@ -136,11 +164,11 @@ export default function Subscribers({
   const handleOpenEditModal = (sub: Subscriber) => {
     setEditModalSub(sub);
     setEditName(sub.name);
-    setEditDocument(sub.document || '');
-    setEditPhone(sub.phone);
+    setEditDocument(formatCpfCnpj(sub.document || ''));
+    setEditPhone(formatPhone(sub.phone));
     setEditEmail(sub.email || '');
     setEditPlanId(sub.planId);
-    setEditPlates(sub.plates.join(', '));
+    setEditPlates(formatPlateList(sub.plates.join(', ')));
     setEditDueDay(sub.dueDay.toString());
     setEditStatus(sub.status);
     setEditNotes(sub.notes || '');
@@ -151,14 +179,29 @@ export default function Subscribers({
     e.preventDefault();
     if (!editModalSub) return;
 
+    const normalizedPhone = normalizePhone(editPhone);
+    const normalizedDocument = normalizeDocument(editDocument);
+    const platesArray = editPlates.split(',').map(normalizePlate).filter(Boolean);
+    if (normalizedPhone.length !== 10 && normalizedPhone.length !== 11) {
+      setEditError('Informe um telefone com DDD válido.');
+      return;
+    }
+    if (normalizedDocument && normalizedDocument.length !== 11 && normalizedDocument.length !== 14) {
+      setEditError('Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.');
+      return;
+    }
+    if (platesArray.some(plateValue => !isValidPlate(plateValue))) {
+      setEditError('Informe placas válidas nos formatos ABC-1234 ou ABC1D23.');
+      return;
+    }
+
     setEditLoading(true);
     setEditError(null);
     try {
-      const platesArray = editPlates.split(',').map(p => p.trim()).filter(Boolean);
       await api.updateSubscriber(editModalSub.id, {
         name: editName,
-        document: editDocument,
-        phone: editPhone,
+        document: normalizedDocument,
+        phone: normalizedPhone,
         email: editEmail,
         planId: editPlanId,
         plates: platesArray,
@@ -275,7 +318,10 @@ export default function Subscribers({
                         <h4 className="font-bold text-app-text text-[11px] truncate uppercase" title={s.name}>
                           {s.name}
                         </h4>
-                        <span className="text-[9px] text-app-muted font-mono block">CPF: {s.document || 'NÃO INFORMADO'}</span>
+                        <span className="text-[9px] text-app-muted font-mono block">
+                          {s.document ? `${getDocumentLabel(s.document)}: ${formatCpfCnpj(s.document)}` : 'DOCUMENTO: NÃO INFORMADO'}
+                        </span>
+                        <span className="text-[9px] text-app-muted font-mono block">TEL: {formatPhone(s.phone)}</span>
                       </div>
                       <span className="shrink-0">
                         {s.status === 'active' && <span className="px-1.5 py-0.5 text-[8px] font-bold rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">ATIVO</span>}
@@ -307,7 +353,7 @@ export default function Subscribers({
                         <div className="flex flex-wrap gap-1">
                           {s.plates.map(plate => (
                             <span key={plate} className="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-mono font-bold rounded text-[9px] uppercase">
-                              {plate}
+                              {formatPlate(plate)}
                             </span>
                           ))}
                         </div>
@@ -372,8 +418,10 @@ export default function Subscribers({
                   <input
                     type="text"
                     value={document}
-                    onChange={(e) => setDocument(e.target.value)}
-                    placeholder="000.000.000-00"
+                    onChange={(e) => setDocument(formatCpfCnpj(e.target.value))}
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    inputMode="numeric"
+                    maxLength={18}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"
                   />
                 </div>
@@ -381,10 +429,12 @@ export default function Subscribers({
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TELEFONE DE CONTATO *</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
                     placeholder="(85) 99876-5432"
+                    inputMode="tel"
+                    maxLength={15}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"
                     required
                   />
@@ -433,8 +483,10 @@ export default function Subscribers({
                   <input
                     type="text"
                     value={plates}
-                    onChange={(e) => setPlates(e.target.value)}
-                    placeholder="EX: ABC1D23, XYZ9W87"
+                    onChange={(e) => setPlates(formatPlateList(e.target.value))}
+                    placeholder="EX: ABC-1234, XYZ9W87"
+                    autoCapitalize="characters"
+                    spellCheck={false}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 font-mono uppercase placeholder-app-muted/30"
                     required
                   />
@@ -512,7 +564,9 @@ export default function Subscribers({
                   <input
                     type="text"
                     value={editDocument}
-                    onChange={(e) => setEditDocument(e.target.value)}
+                    onChange={(e) => setEditDocument(formatCpfCnpj(e.target.value))}
+                    inputMode="numeric"
+                    maxLength={18}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -520,9 +574,11 @@ export default function Subscribers({
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TELEFONE DE CONTATO *</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
+                    onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                    inputMode="tel"
+                    maxLength={15}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
                     required
                   />
@@ -584,7 +640,10 @@ export default function Subscribers({
                   <input
                     type="text"
                     value={editPlates}
-                    onChange={(e) => setEditPlates(e.target.value)}
+                    onChange={(e) => setEditPlates(formatPlateList(e.target.value))}
+                    placeholder="EX: ABC-1234, XYZ9W87"
+                    autoCapitalize="characters"
+                    spellCheck={false}
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 font-mono uppercase"
                     required
                   />
