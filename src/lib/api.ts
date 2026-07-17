@@ -26,6 +26,8 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
   }
+
+  if (response.status === 204) return undefined as T;
   
   return response.json();
 }
@@ -40,6 +42,7 @@ export const api = {
   getUsers: () => request<any[]>('/api/users'),
   createUser: (user: any) => request<any>('/api/users', { method: 'POST', body: JSON.stringify(user) }),
   updateUser: (id: string, user: any) => request<any>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(user) }),
+  deleteUser: (id: string) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
   
   getSessions: () => request<ParkingSession[]>('/api/parking/sessions'),
   registerEntry: (data: {

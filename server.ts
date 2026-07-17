@@ -212,14 +212,17 @@ app.post('/api/users', async (req, res) => {
   
   const db = await getDb();
   const { name, email, role } = req.body;
-  if (!name || !email || !role) {
-    return res.status(400).json({ error: 'Campos obrigatórios ausentes.' });
+  if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
+    return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
+  }
+  if (db.users.some(user => user.email.toLowerCase() === email.trim().toLowerCase())) {
+    return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
   }
   
   const newUser = {
     id: `user-${Date.now()}`,
-    name,
-    email,
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
     role,
     active: true,
     createdAt: new Date().toISOString()
@@ -244,12 +247,52 @@ app.put('/api/users/:id', async (req, res) => {
     return res.status(404).json({ error: 'Usuário não encontrado.' });
   }
   
+  const { name, email, role, active } = req.body;
+  if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
+    return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
+  }
+  if (userToEdit.id === actor.id && active === false) {
+    return res.status(400).json({ error: 'Você não pode desativar o próprio acesso.' });
+  }
+  if (userToEdit.role === 'admin' && (role !== 'admin' || active === false) && db.users.filter(u => u.role === 'admin' && u.active).length === 1) {
+    return res.status(400).json({ error: 'Mantenha pelo menos um administrador ativo no sistema.' });
+  }
+  if (db.users.some(u => u.id !== userToEdit.id && u.email.toLowerCase() === email.trim().toLowerCase())) {
+    return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
+  }
+
   const oldUser = { ...userToEdit };
-  Object.assign(userToEdit, req.body);
+  Object.assign(userToEdit, { name: name.trim(), email: email.trim().toLowerCase(), role, active: active !== false });
   await saveDb(db);
   
   await addAuditLog(actor.id, actor.name, `Editou Usuário: ${userToEdit.name}`, 'Usuário', userToEdit.id, oldUser, userToEdit);
   res.json(userToEdit);
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  const actor = await getReqUser(req);
+  if (actor.role !== 'admin') {
+    return res.status(403).json({ error: 'Apenas Administradores podem excluir usuários.' });
+  }
+
+  const db = await getDb();
+  const userIndex = db.users.findIndex(u => u.id === req.params.id);
+  if (userIndex === -1) {
+    return res.status(404).json({ error: 'Usuário não encontrado.' });
+  }
+
+  const userToDelete = db.users[userIndex];
+  if (userToDelete.id === actor.id) {
+    return res.status(400).json({ error: 'Você não pode excluir o próprio acesso.' });
+  }
+  if (userToDelete.role === 'admin' && db.users.filter(u => u.role === 'admin').length === 1) {
+    return res.status(400).json({ error: 'Mantenha pelo menos um administrador no sistema.' });
+  }
+
+  db.users.splice(userIndex, 1);
+  await saveDb(db);
+  await addAuditLog(actor.id, actor.name, `Excluiu Usuário: ${userToDelete.name}`, 'Usuário', userToDelete.id, userToDelete);
+  res.status(204).end();
 });
 
 // 4. PARKING SESSIONS API

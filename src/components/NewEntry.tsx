@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Car, Plus, ClipboardCheck, ArrowRight, Printer, 
-  Copy, CheckCircle2, AlertCircle, Info, RefreshCw 
+  Copy, CheckCircle2, AlertCircle, Info, RefreshCw, MessageCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { formatPlate, isValidPlate, normalizePlate } from '../lib/masks';
+import { formatPhone, formatPlate, isValidPlate, normalizePhone, normalizePlate } from '../lib/masks';
+import { getBrandsForVehicleType, VEHICLE_COLORS } from '../lib/vehicle-options';
 import { VehicleType, Subscriber } from '../types';
 import { motion } from 'motion/react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface NewEntryProps {
   vehicleTypes: VehicleType[];
@@ -27,6 +29,7 @@ export default function NewEntry({
   const [selectedTypeId, setSelectedTypeId] = useState('');
   const [color, setColor] = useState('');
   const [model, setModel] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [vaga, setVaga] = useState('');
   const [notes, setNotes] = useState('');
   const [entryType, setEntryType] = useState<'avulso' | 'mensalista' | 'convenio' | 'cortesia'>('avulso');
@@ -62,6 +65,7 @@ export default function NewEntry({
       if (matched.status === 'active') {
         setEntryType('mensalista');
       }
+      if (matched.phone) setCustomerPhone(formatPhone(matched.phone));
     } else {
       setMatchedSub(null);
       if (entryType === 'mensalista') {
@@ -78,6 +82,10 @@ export default function NewEntry({
     }
     if (!isValidPlate(plate)) {
       setError('Informe uma placa válida no formato ABC-1234 ou ABC1D23.');
+      return;
+    }
+    if (customerPhone && ![10, 11].includes(normalizePhone(customerPhone).length)) {
+      setError('Informe um WhatsApp com DDD válido ou deixe o campo em branco.');
       return;
     }
     
@@ -104,22 +112,34 @@ export default function NewEntry({
     }
   };
 
-  const handleCopyTicket = () => {
-    if (!createdTicket) return;
-    const ticketText = `
+  const buildTicketText = (ticket: any) => `
 ----------------------------
   PARKGESTOR - CENTRO
   COMPROVANTE DE ENTRADA
 ----------------------------
-TICKET: ${createdTicket.ticketNumber}
-PLACA: ${formatPlate(createdTicket.displayPlate)}
-MODELO: ${createdTicket.model || 'Não informado'}
-ENTRADA: ${new Date(createdTicket.entryAt).toLocaleDateString('pt-BR')} ${new Date(createdTicket.entryAt).toLocaleTimeString('pt-BR')}
-VAGA: ${createdTicket.vaga || 'Livre'}
-TIPO: ${createdTicket.entryType.toUpperCase()}
+TICKET: ${ticket.ticketNumber}
+PLACA: ${formatPlate(ticket.displayPlate)}
+VEÍCULO: ${ticket.model || 'Não informado'}
+ENTRADA: ${new Date(ticket.entryAt).toLocaleDateString('pt-BR')} ${new Date(ticket.entryAt).toLocaleTimeString('pt-BR')}
+VAGA: ${ticket.vaga || 'Livre'}
+TIPO: ${ticket.entryType.toUpperCase()}
 ----------------------------
 Conserve este ticket para a saída.
     `.trim();
+
+  const buildQrPayload = (ticket: any) => JSON.stringify({
+    ticket: ticket.ticketNumber,
+    placa: formatPlate(ticket.displayPlate),
+    veiculo: ticket.model || undefined,
+    entrada: ticket.entryAt,
+    vaga: ticket.vaga || undefined,
+    modalidade: ticket.entryType,
+    token: ticket.publicToken
+  });
+
+  const handleCopyTicket = () => {
+    if (!createdTicket) return;
+    const ticketText = buildTicketText(createdTicket);
     
     navigator.clipboard.writeText(ticketText);
     setCopied(true);
@@ -130,6 +150,7 @@ Conserve este ticket para a saída.
     setPlate('');
     setColor('');
     setModel('');
+    setCustomerPhone('');
     setVaga('');
     setNotes('');
     setEntryType('avulso');
@@ -201,23 +222,12 @@ Conserve este ticket para a saída.
               </div>
             </div>
 
-            {/* Simulating QR code */}
+            {/* QR code with ticket information */}
             <div className="flex flex-col items-center justify-center pt-3 border-t border-dashed border-app-border gap-1.5">
-              <div className="w-16 h-16 bg-app-card border border-app-border flex items-center justify-center p-1 rounded">
-                <div className="w-full h-full bg-app-bg rounded flex flex-wrap p-0.5">
-                  {Array.from({ length: 16 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className={`w-1/4 h-1/4 ${
-                        (i % 2 === 0 && i % 3 === 0) || i === 0 || i === 3 || i === 12 || i === 15 
-                          ? 'bg-indigo-500' 
-                          : 'bg-transparent'
-                      }`} 
-                    />
-                  ))}
-                </div>
+              <div className="bg-white p-1.5 rounded border border-app-border">
+                <QRCodeSVG value={buildQrPayload(createdTicket)} size={84} level="M" includeMargin={false} />
               </div>
-              <p className="text-[8px] text-app-subtle font-mono uppercase">TOKEN: {createdTicket.publicToken}</p>
+              <p className="text-[8px] text-app-subtle font-mono uppercase text-center">Aponte a câmera para consultar os dados do ticket</p>
             </div>
           </div>
 
@@ -237,6 +247,17 @@ Conserve este ticket para a saída.
               <Printer className="w-3.5 h-3.5 text-app-muted" />
               <span>IMPRIMIR TICKET</span>
             </button>
+            {customerPhone && (
+              <a
+                href={`https://wa.me/55${normalizePhone(customerPhone)}?text=${encodeURIComponent(buildTicketText(createdTicket))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 rounded text-white font-bold uppercase text-[9px] transition cursor-pointer"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>ENVIAR WHATSAPP</span>
+              </a>
+            )}
           </div>
           <div className="p-3 border-t border-app-border bg-indigo-500/5 flex justify-end">
             <button
@@ -360,14 +381,18 @@ Conserve este ticket para a saída.
         {/* Optional Fields model & color */}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Modelo (Opcional)</label>
+            <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Marca / Modelo (Opcional)</label>
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="EX: COROLLA"
+              placeholder="EX: TOYOTA COROLLA"
+              list="vehicle-brand-options"
               className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 uppercase placeholder-app-muted/30"
             />
+            <datalist id="vehicle-brand-options">
+              {getBrandsForVehicleType(vehicleTypes.find(type => type.id === selectedTypeId)?.name).map(brand => <option key={brand} value={brand} />)}
+            </datalist>
           </div>
           <div className="space-y-1">
             <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Cor (Opcional)</label>
@@ -376,9 +401,27 @@ Conserve este ticket para a saída.
               value={color}
               onChange={(e) => setColor(e.target.value)}
               placeholder="EX: PRATA"
+              list="vehicle-color-options"
               className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 uppercase placeholder-app-muted/30"
             />
+            <datalist id="vehicle-color-options">
+              {VEHICLE_COLORS.map(vehicleColor => <option key={vehicleColor} value={vehicleColor} />)}
+            </datalist>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">WhatsApp do cliente (Opcional)</label>
+          <input
+            type="tel"
+            inputMode="tel"
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(formatPhone(e.target.value))}
+            placeholder="(85) 99999-9999"
+            maxLength={15}
+            className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"
+          />
+          <p className="text-[8px] text-app-subtle">Após registrar, você poderá abrir o WhatsApp com o comprovante pronto para enviar.</p>
         </div>
 
         {/* Optional fields vaga & notes */}

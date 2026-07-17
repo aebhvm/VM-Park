@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Settings, Users, ClipboardList, Coins, AlertCircle, CheckCircle2, 
-  Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X 
+  Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X, Pencil
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
@@ -112,6 +112,8 @@ export default function AdminConfig({
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserRole, setNewUserRole] = useState<'admin' | 'manager' | 'operator'>('operator');
+  const [newUserActive, setNewUserActive] = useState(true);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
 
@@ -285,18 +287,50 @@ export default function AdminConfig({
     setUserLoading(true);
     setUserError(null);
     try {
-      await api.createUser({
+      const userData = {
         name: newUserName,
         email: newUserEmail,
-        role: newUserRole
-      });
+        role: newUserRole,
+        active: newUserActive
+      };
+      if (editingUser) {
+        await api.updateUser(editingUser.id, userData);
+      } else {
+        await api.createUser(userData);
+      }
       setUserModalOpen(false);
+      setEditingUser(null);
       setNewUserName('');
       setNewUserEmail('');
       setNewUserRole('operator');
+      setNewUserActive(true);
       onRefresh();
     } catch (err: any) {
-      setUserError(err.message || 'Erro ao criar usuário.');
+      setUserError(err.message || `Erro ao ${editingUser ? 'editar' : 'criar'} usuário.`);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const openUserModal = (user?: User) => {
+    setEditingUser(user || null);
+    setNewUserName(user?.name || '');
+    setNewUserEmail(user?.email || '');
+    setNewUserRole(user?.role || 'operator');
+    setNewUserActive(user?.active ?? true);
+    setUserError(null);
+    setUserModalOpen(true);
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    if (!window.confirm(`Excluir o usuário ${user.name}? Esta ação não pode ser desfeita.`)) return;
+    setUserLoading(true);
+    setUserError(null);
+    try {
+      await api.deleteUser(user.id);
+      onRefresh();
+    } catch (err: any) {
+      setUserError(err.message || 'Erro ao excluir usuário.');
     } finally {
       setUserLoading(false);
     }
@@ -1132,7 +1166,7 @@ export default function AdminConfig({
                 <p className="text-[10px] text-app-muted mt-0.5">Definição de perfis de acesso, permissões e login.</p>
               </div>
               <button
-                onClick={() => setUserModalOpen(true)}
+                onClick={() => openUserModal()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold uppercase transition shadow cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -1149,6 +1183,7 @@ export default function AdminConfig({
                     <th className="p-2.5 font-bold">PERFIL / NIVEL</th>
                     <th className="p-2.5 font-bold">STATUS</th>
                     <th className="p-2.5 font-bold">DATA ADMISSÃO</th>
+                    <th className="p-2.5 font-bold text-right">AÇÕES</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border">
@@ -1168,13 +1203,23 @@ export default function AdminConfig({
                         </span>
                       </td>
                       <td className="p-2.5">
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold uppercase text-[8px]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-550 dark:bg-emerald-500 animate-pulse"></span>
-                          ATIVO
+                        <span className={`inline-flex items-center gap-1 font-bold uppercase text-[8px] ${u.active ? 'text-emerald-600 dark:text-emerald-400' : 'text-app-muted'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.active ? 'bg-emerald-550 dark:bg-emerald-500 animate-pulse' : 'bg-app-muted'}`}></span>
+                          {u.active ? 'ATIVO' : 'INATIVO'}
                         </span>
                       </td>
                       <td className="p-2.5 text-app-subtle font-mono">
                         {new Date(u.createdAt).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="p-2.5">
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={() => openUserModal(u)} title={`Editar ${u.name}`} className="p-1.5 rounded border border-app-border text-app-muted hover:text-indigo-500 hover:border-indigo-500 transition cursor-pointer">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => handleDeleteUser(u)} disabled={userLoading} title={`Excluir ${u.name}`} className="p-1.5 rounded border border-app-border text-app-muted hover:text-rose-500 hover:border-rose-500 transition cursor-pointer disabled:opacity-40">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1187,10 +1232,11 @@ export default function AdminConfig({
               <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
                 <div className="bg-app-card rounded border border-app-border max-w-sm w-full shadow-2xl overflow-hidden text-[10px]">
                   <div className="flex justify-between items-center px-4 py-2.5 border-b border-app-border bg-app-bg/50">
-                    <span className="font-bold text-app-text uppercase">ADICIONAR NOVO COLABORADOR</span>
+                    <span className="font-bold text-app-text uppercase">{editingUser ? 'EDITAR COLABORADOR' : 'ADICIONAR NOVO COLABORADOR'}</span>
                     <button 
                       onClick={() => {
                         setUserModalOpen(false);
+                        setEditingUser(null);
                         setUserError(null);
                       }}
                       className="p-1 hover:bg-app-border rounded text-app-muted transition cursor-pointer"
@@ -1211,6 +1257,13 @@ export default function AdminConfig({
                         required
                       />
                     </div>
+
+                    {editingUser && (
+                      <label className="flex items-center gap-2 text-[9px] font-bold text-app-muted uppercase cursor-pointer">
+                        <input type="checkbox" checked={newUserActive} onChange={(e) => setNewUserActive(e.target.checked)} disabled={editingUser.id === currentUser.id} className="w-3.5 h-3.5 rounded border-app-border" />
+                        Usuário ativo
+                      </label>
+                    )}
                     
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">E-MAIL DE LOGIN *</label>
@@ -1244,7 +1297,10 @@ export default function AdminConfig({
                     <div className="pt-3 border-t border-app-border flex gap-2 justify-end bg-app-card -mx-4 -mb-4 p-3">
                       <button
                         type="button"
-                        onClick={() => setUserModalOpen(false)}
+                        onClick={() => {
+                          setUserModalOpen(false);
+                          setEditingUser(null);
+                        }}
                         className="px-3 py-1.5 text-[9px] font-bold uppercase text-app-muted hover:text-app-text cursor-pointer"
                       >
                         CANCELAR
@@ -1254,7 +1310,7 @@ export default function AdminConfig({
                         disabled={userLoading}
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold uppercase transition cursor-pointer"
                       >
-                        {userLoading ? 'CADASTRANDO...' : 'CONFIRMAR CADASTRO'}
+                        {userLoading ? 'SALVANDO...' : editingUser ? 'SALVAR ALTERAÇÕES' : 'CONFIRMAR CADASTRO'}
                       </button>
                     </div>
                   </form>

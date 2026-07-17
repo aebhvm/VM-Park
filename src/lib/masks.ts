@@ -94,13 +94,17 @@ export function isValidPlate(value: MaskInput): boolean {
   return /^[A-Z]{3}\d{4}$/.test(plate) || /^[A-Z]{3}\d[A-Z]\d{2}$/.test(plate);
 }
 
-/** Formats legacy plates with a dash and keeps Mercosur plates unseparated. */
+/**
+ * Formats Brazilian plates in the official display patterns:
+ * legacy AAA-1234 and Mercosul AAA1A23. While the fourth character alone
+ * is ambiguous, no dash is shown until the fifth character identifies it.
+ */
 export function formatPlate(value: MaskInput): string {
   const plate = normalizePlate(value);
 
-  if (plate.length <= 3) return plate;
+  if (plate.length <= 4) return plate;
 
-  const isMercosur = plate.length >= 5 && /[A-Z]/.test(plate.charAt(4));
+  const isMercosur = /[A-Z]/.test(plate.charAt(4));
   return isMercosur ? plate : `${plate.slice(0, 3)}-${plate.slice(3)}`;
 }
 
