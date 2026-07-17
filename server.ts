@@ -301,11 +301,31 @@ app.get('/api/parking/sessions', async (req, res) => {
   res.json(db.parkingSessions);
 });
 
+app.get('/api/parking/vehicle/:plate', async (req, res) => {
+  const normalizedPlate = normalizePlate(req.params.plate);
+  if (!isValidPlate(normalizedPlate)) return res.json(null);
+
+  const db = await getDb();
+  const lastSession = db.parkingSessions
+    .filter(session => session.normalizedPlate === normalizedPlate)
+    .sort((a, b) => new Date(b.updatedAt || b.entryAt).getTime() - new Date(a.updatedAt || a.entryAt).getTime())[0];
+
+  if (!lastSession) return res.json(null);
+
+  res.json({
+    vehicleTypeId: lastSession.vehicleTypeId,
+    brand: lastSession.brand,
+    model: lastSession.model,
+    color: lastSession.color,
+    customerPhone: lastSession.customerPhone
+  });
+});
+
 app.post('/api/parking/entry', async (req, res) => {
   const user = await getReqUser(req);
   const db = await getDb();
   
-  const { plate, vehicleTypeId, color, model, notes, vaga, entryType } = req.body;
+  const { plate, vehicleTypeId, brand, customerPhone, color, model, notes, vaga, entryType } = req.body;
   if (!plate || !vehicleTypeId) {
     return res.status(400).json({ error: 'Placa e Tipo de Veículo são obrigatórios.' });
   }
@@ -357,6 +377,8 @@ app.post('/api/parking/entry', async (req, res) => {
     normalizedPlate,
     displayPlate,
     vehicleTypeId,
+    brand,
+    customerPhone: customerPhone ? normalizePhone(customerPhone) : undefined,
     color,
     model,
     notes,
@@ -388,11 +410,13 @@ app.post('/api/parking/calculate', async (req, res) => {
   const session = db.parkingSessions.find(s => s.id === sessionId);
   if (!session) return res.status(404).json({ error: 'Sessão não encontrada.' });
   
-  if (session.entryType === 'mensalista' || session.entryType === 'cortesia') {
-    return res.json({ calculatedAmount: 0.00, elapsedMinutes: 0 });
-  }
-  
   const exitTime = exitAt ? new Date(exitAt).toISOString() : new Date().toISOString();
+  const diffMs = new Date(exitTime).getTime() - new Date(session.entryAt).getTime();
+  const diffMinutes = Math.max(0, Math.ceil(diffMs / (60 * 1000)));
+
+  if (session.entryType === 'mensalista' || session.entryType === 'cortesia') {
+    return res.json({ calculatedAmount: 0.00, elapsedMinutes: diffMinutes });
+  }
   
   // Find pricing plan
   const plan = db.pricingPlans.find(p => p.vehicleTypeId === session.vehicleTypeId && p.active);
@@ -401,9 +425,6 @@ app.post('/api/parking/calculate', async (req, res) => {
   }
   
   const amount = calculateParkingAmount(session.entryAt, exitTime, plan);
-  const diffMs = new Date(exitTime).getTime() - new Date(session.entryAt).getTime();
-  const diffMinutes = Math.max(0, Math.ceil(diffMs / (60 * 1000)));
-  
   res.json({
     calculatedAmount: amount,
     elapsedMinutes: diffMinutes,

@@ -45,9 +45,12 @@ export const api = {
   deleteUser: (id: string) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
   
   getSessions: () => request<ParkingSession[]>('/api/parking/sessions'),
+  findVehicleByPlate: (plate: string) => request<Pick<ParkingSession, 'vehicleTypeId' | 'brand' | 'model' | 'color' | 'customerPhone'> | null>(`/api/parking/vehicle/${plate}`),
   registerEntry: (data: {
     plate: string;
     vehicleTypeId: string;
+    brand?: string;
+    customerPhone?: string;
     color?: string;
     model?: string;
     notes?: string;

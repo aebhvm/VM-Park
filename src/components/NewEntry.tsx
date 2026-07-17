@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Car, Plus, ClipboardCheck, ArrowRight, Printer, 
-  Copy, CheckCircle2, AlertCircle, Info, RefreshCw, MessageCircle
+  Car, Plus, ClipboardCheck, ArrowRight,
+  CheckCircle2, AlertCircle, Info, RefreshCw, MessageCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatPhone, formatPlate, isValidPlate, normalizePhone, normalizePlate } from '../lib/masks';
-import { getBrandsForVehicleType, VEHICLE_COLORS } from '../lib/vehicle-options';
+import { getBrandsForVehicleType, getModelsForBrand, VEHICLE_COLORS } from '../lib/vehicle-options';
 import { VehicleType, Subscriber } from '../types';
 import { motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -27,6 +27,7 @@ export default function NewEntry({
 }: NewEntryProps) {
   const [plate, setPlate] = useState('');
   const [selectedTypeId, setSelectedTypeId] = useState('');
+  const [brand, setBrand] = useState('');
   const [color, setColor] = useState('');
   const [model, setModel] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -39,10 +40,10 @@ export default function NewEntry({
   
   // Success ticket display state
   const [createdTicket, setCreatedTicket] = useState<any | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // Auto-detect subscribers based on typed plate
   const [matchedSub, setMatchedSub] = useState<Subscriber | null>(null);
+  const vehicleLookupPlateRef = useRef('');
 
   useEffect(() => {
     if (vehicleTypes.length > 0 && !selectedTypeId) {
@@ -50,11 +51,33 @@ export default function NewEntry({
     }
   }, [vehicleTypes, selectedTypeId]);
 
+  const loadKnownVehicle = async (plateValue: string) => {
+    vehicleLookupPlateRef.current = plateValue;
+    try {
+      const vehicle = await api.findVehicleByPlate(plateValue);
+      if (!vehicle || vehicleLookupPlateRef.current !== plateValue) return;
+
+      if (vehicle.vehicleTypeId) setSelectedTypeId(vehicle.vehicleTypeId);
+      setBrand(vehicle.brand || '');
+      setModel(vehicle.model || '');
+      setColor(vehicle.color || '');
+      if (vehicle.customerPhone) setCustomerPhone(formatPhone(vehicle.customerPhone));
+    } catch {
+      // A vehicle not found must not interrupt a new registration.
+    }
+  };
+
   // Plate normalizer for real-time validation
   const handlePlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formattedPlate = formatPlate(e.target.value);
     const normalizedPlate = normalizePlate(formattedPlate);
     setPlate(formattedPlate);
+
+    if (normalizedPlate.length === 7 && isValidPlate(normalizedPlate)) {
+      void loadKnownVehicle(normalizedPlate);
+    } else {
+      vehicleLookupPlateRef.current = '';
+    }
 
     const matched = subscribers.find(sub =>
       sub.plates.some(subscriberPlate => normalizePlate(subscriberPlate) === normalizedPlate)
@@ -84,11 +107,13 @@ export default function NewEntry({
       setError('Informe uma placa válida no formato ABC-1234 ou ABC1D23.');
       return;
     }
-    if (customerPhone && ![10, 11].includes(normalizePhone(customerPhone).length)) {
-      setError('Informe um WhatsApp com DDD válido ou deixe o campo em branco.');
+    const whatsappPhone = normalizePhone(customerPhone);
+    if (![10, 11].includes(whatsappPhone.length)) {
+      setError('Informe o WhatsApp do cliente com DDD para enviar os comprovantes de entrada e saída.');
       return;
     }
     
+    const whatsappWindow = window.open('', '_blank');
     setLoading(true);
     setError(null);
     
@@ -96,6 +121,8 @@ export default function NewEntry({
       const response = await api.registerEntry({
         plate: normalizePlate(plate),
         vehicleTypeId: selectedTypeId,
+        brand,
+        customerPhone: whatsappPhone,
         color,
         model,
         vaga,
@@ -104,8 +131,12 @@ export default function NewEntry({
       });
       
       setCreatedTicket(response.session);
+      const whatsappUrl = `https://wa.me/55${whatsappPhone}?text=${encodeURIComponent(buildTicketText(response.session))}`;
+      if (whatsappWindow) whatsappWindow.location.href = whatsappUrl;
+      else window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       onSuccess(); // Trigger statistics refresh in parent
     } catch (err: any) {
+      whatsappWindow?.close();
       setError(err.message || 'Erro ao registrar entrada do veículo.');
     } finally {
       setLoading(false);
@@ -119,7 +150,7 @@ export default function NewEntry({
 ----------------------------
 TICKET: ${ticket.ticketNumber}
 PLACA: ${formatPlate(ticket.displayPlate)}
-VEÍCULO: ${ticket.model || 'Não informado'}
+VEÍCULO: ${[ticket.brand, ticket.model].filter(Boolean).join(' ') || 'Não informado'}
 ENTRADA: ${new Date(ticket.entryAt).toLocaleDateString('pt-BR')} ${new Date(ticket.entryAt).toLocaleTimeString('pt-BR')}
 VAGA: ${ticket.vaga || 'Livre'}
 TIPO: ${ticket.entryType.toUpperCase()}
@@ -130,24 +161,17 @@ Conserve este ticket para a saída.
   const buildQrPayload = (ticket: any) => JSON.stringify({
     ticket: ticket.ticketNumber,
     placa: formatPlate(ticket.displayPlate),
-    veiculo: ticket.model || undefined,
+    marca: ticket.brand || undefined,
+    modelo: ticket.model || undefined,
     entrada: ticket.entryAt,
     vaga: ticket.vaga || undefined,
     modalidade: ticket.entryType,
     token: ticket.publicToken
   });
 
-  const handleCopyTicket = () => {
-    if (!createdTicket) return;
-    const ticketText = buildTicketText(createdTicket);
-    
-    navigator.clipboard.writeText(ticketText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const resetForm = () => {
     setPlate('');
+    setBrand('');
     setColor('');
     setModel('');
     setCustomerPhone('');
@@ -198,10 +222,10 @@ Conserve este ticket para a saída.
                   {vehicleTypes.find(t => t.id === createdTicket.vehicleTypeId)?.name || 'CARRO'}
                 </span>
               </div>
-              {createdTicket.model && (
+              {(createdTicket.brand || createdTicket.model) && (
                 <div className="flex justify-between">
                   <span>VEÍCULO:</span>
-                  <span className="font-bold text-app-text uppercase">{createdTicket.model} {createdTicket.color && `(${createdTicket.color})`}</span>
+                  <span className="font-bold text-app-text uppercase">{[createdTicket.brand, createdTicket.model].filter(Boolean).join(' ')} {createdTicket.color && `(${createdTicket.color})`}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -227,37 +251,24 @@ Conserve este ticket para a saída.
               <div className="bg-white p-1.5 rounded border border-app-border">
                 <QRCodeSVG value={buildQrPayload(createdTicket)} size={84} level="M" includeMargin={false} />
               </div>
-              <p className="text-[8px] text-app-subtle font-mono uppercase text-center">Aponte a câmera para consultar os dados do ticket</p>
+              <p className="text-[8px] text-app-subtle font-mono uppercase text-center">QR com os dados do ticket</p>
             </div>
           </div>
 
           {/* Action buttons */}
-          <div className="p-3 flex flex-col sm:flex-row gap-2 bg-app-card">
-            <button
-              onClick={handleCopyTicket}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-app-bg border border-app-border hover:bg-app-border-sub rounded text-app-text font-bold uppercase text-[9px] transition cursor-pointer"
-            >
-              <Copy className="w-3.5 h-3.5 text-app-muted" />
-              <span>{copied ? 'COPIADO!' : 'COPIAR TEXTO'}</span>
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-app-bg border border-app-border hover:bg-app-border-sub rounded text-app-text font-bold uppercase text-[9px] transition cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5 text-app-muted" />
-              <span>IMPRIMIR TICKET</span>
-            </button>
+          <div className="p-3 bg-app-card">
             {customerPhone && (
               <a
                 href={`https://wa.me/55${normalizePhone(customerPhone)}?text=${encodeURIComponent(buildTicketText(createdTicket))}`}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 rounded text-white font-bold uppercase text-[9px] transition cursor-pointer"
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 rounded text-white font-bold uppercase text-[9px] transition cursor-pointer"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
                 <span>ENVIAR WHATSAPP</span>
               </a>
             )}
+            {!customerPhone && <p className="text-center text-[9px] text-app-muted uppercase">Nenhum WhatsApp informado para este ticket.</p>}
           </div>
           <div className="p-3 border-t border-app-border bg-indigo-500/5 flex justify-end">
             <button
@@ -378,20 +389,37 @@ Conserve este ticket para a saída.
           </div>
         </div>
 
-        {/* Optional Fields model & color */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Optional vehicle identification fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="space-y-1">
-            <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Marca / Modelo (Opcional)</label>
+            <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Marca (Opcional)</label>
             <input
               type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="EX: TOYOTA COROLLA"
+              value={brand}
+              onChange={(e) => {
+                setBrand(e.target.value);
+                setModel('');
+              }}
+              placeholder="EX: TOYOTA"
               list="vehicle-brand-options"
               className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 uppercase placeholder-app-muted/30"
             />
             <datalist id="vehicle-brand-options">
               {getBrandsForVehicleType(vehicleTypes.find(type => type.id === selectedTypeId)?.name).map(brand => <option key={brand} value={brand} />)}
+            </datalist>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">Modelo (Opcional)</label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="EX: COROLLA"
+              list="vehicle-model-options"
+              className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 uppercase placeholder-app-muted/30"
+            />
+            <datalist id="vehicle-model-options">
+              {getModelsForBrand(brand).map(vehicleModel => <option key={vehicleModel} value={vehicleModel} />)}
             </datalist>
           </div>
           <div className="space-y-1">
@@ -411,7 +439,7 @@ Conserve este ticket para a saída.
         </div>
 
         <div className="space-y-1">
-          <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">WhatsApp do cliente (Opcional)</label>
+          <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">WhatsApp do cliente *</label>
           <input
             type="tel"
             inputMode="tel"
@@ -419,6 +447,7 @@ Conserve este ticket para a saída.
             onChange={(e) => setCustomerPhone(formatPhone(e.target.value))}
             placeholder="(85) 99999-9999"
             maxLength={15}
+            required
             className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"
           />
           <p className="text-[8px] text-app-subtle">Após registrar, você poderá abrir o WhatsApp com o comprovante pronto para enviar.</p>

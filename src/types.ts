@@ -38,6 +38,8 @@ export interface ParkingSession {
   normalizedPlate: string;
   displayPlate: string;
   vehicleTypeId: string;
+  brand?: string;
+  customerPhone?: string;
   color?: string;
   model?: string;
   notes?: string;

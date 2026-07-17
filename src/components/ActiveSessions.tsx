@@ -4,7 +4,7 @@ import {
   X, Printer, QrCode, Trash2, Coins, Calendar, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { formatBRL, formatCurrencyInput, formatCurrencyValue, formatPlate, normalizeSearchText, parseCurrency } from '../lib/masks';
+import { formatBRL, formatCurrencyInput, formatCurrencyValue, formatPlate, normalizePhone, normalizeSearchText, parseCurrency } from '../lib/masks';
 import { ParkingSession, VehicleType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -114,6 +114,21 @@ export default function ActiveSessions({
     }
   };
 
+  const buildExitReceiptText = (ticket: ParkingSession) => `
+----------------------------
+  PARKGESTOR - COMPROVANTE
+  LIBERAÇÃO DE VEÍCULO
+----------------------------
+TICKET: ${ticket.ticketNumber}
+PLACA: ${formatPlate(ticket.displayPlate)}
+ENTRADA: ${new Date(ticket.entryAt).toLocaleString('pt-BR')}
+SAÍDA: ${ticket.exitAt ? new Date(ticket.exitAt).toLocaleString('pt-BR') : 'Em processamento'}
+VALOR RECEBIDO: ${formatBRL(ticket.finalAmount)}
+PAGAMENTO: ${(ticket.paymentMethod || '').toUpperCase()}
+----------------------------
+Obrigado pela preferência.
+  `.trim();
+
   // Perform actual checkout and exit log
   const handleProcessCheckout = async () => {
     if (!checkoutSession || !calculationData) return;
@@ -128,6 +143,13 @@ export default function ActiveSessions({
       return;
     }
 
+    const whatsappPhone = normalizePhone(checkoutSession.customerPhone);
+    if (![10, 11].includes(whatsappPhone.length)) {
+      setCheckoutError('Este ticket não possui WhatsApp cadastrado na entrada. Registre o número antes de liberar o veículo.');
+      return;
+    }
+
+    const whatsappWindow = window.open('', '_blank');
     setCheckoutLoading(true);
     setCheckoutError(null);
 
@@ -141,8 +163,12 @@ export default function ActiveSessions({
       });
 
       setCheckoutSuccessTicket(data.session);
+      const whatsappUrl = `https://wa.me/55${whatsappPhone}?text=${encodeURIComponent(buildExitReceiptText(data.session))}`;
+      if (whatsappWindow) whatsappWindow.location.href = whatsappUrl;
+      else window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       onRefresh(); // Refresh list in parent
     } catch (err: any) {
+      whatsappWindow?.close();
       setCheckoutError(err.message || 'Erro ao finalizar ticket.');
     } finally {
       setCheckoutLoading(false);
