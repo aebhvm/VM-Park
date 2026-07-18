@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Coins, Clock, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle2, 
-  Plus, Minus, X, AlertTriangle, FileText, Check, Calendar, RefreshCw 
+  Plus, Minus, X, AlertTriangle, FileText, Check, Calendar, RefreshCw, Printer
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatBRL, formatCurrencyInput, formatCurrencyValue, parseCurrency } from '../lib/masks';
@@ -41,6 +41,9 @@ export default function CashRegister({
   const [closingNotes, setClosingNotes] = useState('');
   const [closingLoading, setClosingLoading] = useState(false);
   const [closingError, setClosingError] = useState<string | null>(null);
+
+  // Daily history report
+  const [reportDate, setReportDate] = useState(() => new Date().toLocaleDateString('en-CA'));
 
   const handleOpenCash = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +124,37 @@ export default function CashRegister({
   const currentSessionTransactions = cashStatus 
     ? transactions.filter(t => t.cashSessionId === cashStatus.id) 
     : [];
+
+  const getDateKey = (value: string) => {
+    const date = new Date(value);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const selectedDayTransactions = transactions.filter(transaction => getDateKey(transaction.createdAt) === reportDate);
+  const selectedDayCashSessions = cashSessions.filter(session => getDateKey(session.closedAt || session.openedAt) === reportDate);
+  const isOutflow = (type: string) => ['sangria', 'despesa', 'estorno'].includes(type);
+  const selectedDayInflow = selectedDayTransactions.filter(transaction => !isOutflow(transaction.type)).reduce((total, transaction) => total + transaction.amount, 0);
+  const selectedDayOutflow = selectedDayTransactions.filter(transaction => isOutflow(transaction.type)).reduce((total, transaction) => total + transaction.amount, 0);
+
+  const printSelectedDayReport = () => {
+    const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] || character));
+    const formattedDate = new Date(`${reportDate}T12:00:00`).toLocaleDateString('pt-BR');
+    const rows = selectedDayTransactions.map(transaction => `
+      <tr>
+        <td>${new Date(transaction.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+        <td>${escapeHtml(getTxnTypeLabel(transaction.type))}</td>
+        <td>${escapeHtml(transaction.description)}</td>
+        <td>${escapeHtml(transaction.paymentMethod || 'N/A').toUpperCase()}</td>
+        <td class="${isOutflow(transaction.type) ? 'negative' : 'positive'}">${isOutflow(transaction.type) ? '-' : ''}${formatBRL(transaction.amount)}</td>
+      </tr>`).join('') || '<tr><td colspan="5">Nenhuma movimentação no período.</td></tr>';
+    const reportWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!reportWindow) return;
+
+    reportWindow.document.write(`<!doctype html><html lang="pt-BR"><head><title>Relatório de Caixa - ${formattedDate}</title><style>body{font-family:Arial,sans-serif;color:#172033;margin:32px}h1{font-size:20px;margin:0}p{color:#526070}table{border-collapse:collapse;width:100%;margin-top:24px;font-size:12px}th,td{border:1px solid #d9dee8;padding:9px;text-align:left}th{background:#f4f6f9;text-transform:uppercase;font-size:10px}.summary{display:flex;gap:20px;margin-top:18px}.summary div{border:1px solid #d9dee8;padding:12px;min-width:140px}.summary strong{display:block;font-size:17px;margin-top:4px}.positive{color:#087443;font-weight:bold}.negative{color:#c62828;font-weight:bold}@media print{body{margin:16px}}</style></head><body><h1>ParkGestor — Relatório de Movimento de Caixa</h1><p>Data selecionada: ${formattedDate}</p><div class="summary"><div>Entradas<strong class="positive">${formatBRL(selectedDayInflow)}</strong></div><div>Saídas<strong class="negative">-${formatBRL(selectedDayOutflow)}</strong></div><div>Saldo do dia<strong>${formatBRL(selectedDayInflow - selectedDayOutflow)}</strong></div></div><table><thead><tr><th>Hora</th><th>Categoria</th><th>Descrição</th><th>Forma</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table><p>Gerado em ${new Date().toLocaleString('pt-BR')}.</p></body></html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+  };
 
   const getTxnBadgeColor = (type: string) => {
     switch (type) {
@@ -395,6 +429,81 @@ export default function CashRegister({
           </div>
         </div>
       )}
+
+      {/* DAILY CASH HISTORY */}
+      <div className="theme-card p-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+          <div>
+            <h4 className="font-bold text-xs text-app-text uppercase tracking-wider">Histórico de Movimentações</h4>
+            <p className="text-[10px] text-app-muted mt-0.5">Consulte e imprima o movimento consolidado de qualquer dia.</p>
+          </div>
+          <div className="flex items-end gap-2">
+            <label className="space-y-1">
+              <span className="block text-[8px] font-bold text-app-muted uppercase tracking-wider">Data do relatório</span>
+              <input
+                type="date"
+                value={reportDate}
+                onChange={(event) => setReportDate(event.target.value)}
+                className="bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </label>
+            <button
+              onClick={printSelectedDayReport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold uppercase transition cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Imprimir relatório
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4 text-center">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded p-2">
+            <span className="text-[8px] text-app-muted uppercase font-bold">Entradas</span>
+            <strong className="block font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">{formatBRL(selectedDayInflow)}</strong>
+          </div>
+          <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2">
+            <span className="text-[8px] text-app-muted uppercase font-bold">Saídas</span>
+            <strong className="block font-mono text-rose-500 mt-0.5">-{formatBRL(selectedDayOutflow)}</strong>
+          </div>
+          <div className="bg-app-bg border border-app-border rounded p-2">
+            <span className="text-[8px] text-app-muted uppercase font-bold">Saldo do dia</span>
+            <strong className="block font-mono text-app-text mt-0.5">{formatBRL(selectedDayInflow - selectedDayOutflow)}</strong>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto border border-app-border rounded">
+          <table className="w-full text-left text-[9px] border-collapse bg-app-bg">
+            <thead>
+              <tr className="bg-app-card text-app-muted uppercase tracking-wider border-b border-app-border">
+                <th className="p-2.5 font-bold">Hora</th>
+                <th className="p-2.5 font-bold">Categoria</th>
+                <th className="p-2.5 font-bold">Descrição</th>
+                <th className="p-2.5 font-bold">Forma</th>
+                <th className="p-2.5 font-bold text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-app-border">
+              {selectedDayTransactions.map(transaction => (
+                <tr key={transaction.id} className="hover:bg-app-card/30 text-app-text">
+                  <td className="p-2.5 text-app-subtle font-mono">{new Date(transaction.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td className="p-2.5"><span className={`px-1.5 py-0.5 border rounded text-[8px] font-bold uppercase ${getTxnBadgeColor(transaction.type)}`}>{getTxnTypeLabel(transaction.type)}</span></td>
+                  <td className="p-2.5 text-app-text max-w-[240px] truncate" title={transaction.description}>{transaction.description}</td>
+                  <td className="p-2.5 text-app-subtle uppercase font-mono">{transaction.paymentMethod || 'N/A'}</td>
+                  <td className={`p-2.5 text-right font-bold font-mono ${isOutflow(transaction.type) ? 'text-rose-500' : 'text-emerald-500'}`}>{isOutflow(transaction.type) ? '-' : ''}{formatBRL(transaction.amount)}</td>
+                </tr>
+              ))}
+              {selectedDayTransactions.length === 0 && (
+                <tr><td colSpan={5} className="text-center py-7 text-app-subtle uppercase font-bold">Nenhuma movimentação de caixa no dia selecionado.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {selectedDayCashSessions.length > 0 && (
+          <p className="mt-3 text-[9px] text-app-subtle uppercase font-bold">{selectedDayCashSessions.length} sessão(ões) de caixa registrada(s) nesta data.</p>
+        )}
+      </div>
 
       {/* MODAL 1: SANGRIAS / SUPRIMENTOS FORM */}
       {actionType && (
