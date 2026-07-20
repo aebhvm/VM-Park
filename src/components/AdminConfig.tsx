@@ -49,6 +49,7 @@ export default function AdminConfig({
   const [lotDoc, setLotDoc] = useState(formatCpfCnpj(parkingConfig?.document || ''));
   const [lotPhone, setLotPhone] = useState(formatPhone(parkingConfig?.phone || ''));
   const [lotAddress, setLotAddress] = useState(parkingConfig?.address || '');
+  const [lotLogoUrl, setLotLogoUrl] = useState(parkingConfig?.logoUrl || '');
   const [lotSpaces, setLotSpaces] = useState(parkingConfig?.totalSpaces?.toString() || '90');
   const [lotTolerance, setLotTolerance] = useState(parkingConfig?.toleranceMinutes?.toString() || '15');
   const [configLoading, setConfigLoading] = useState(false);
@@ -133,6 +134,7 @@ export default function AdminConfig({
         document: normalizeDocument(lotDoc),
         phone: normalizePhone(lotPhone),
         address: lotAddress,
+        logoUrl: lotLogoUrl.trim(),
         totalSpaces: parseInt(lotSpaces),
         toleranceMinutes: parseInt(lotTolerance)
       });
@@ -449,6 +451,18 @@ export default function AdminConfig({
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 uppercase font-mono"
                     required
                   />
+                </div>
+
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">LOGO DA EMPRESA (URL DA IMAGEM)</label>
+                  <input
+                    type="url"
+                    value={lotLogoUrl}
+                    onChange={(e) => setLotLogoUrl(e.target.value)}
+                    placeholder="https://suaempresa.com/logo.png"
+                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-[9px] text-app-subtle">Cole o endereço público da imagem para exibi-la na tela de acesso. Deixe em branco para usar a marca padrão.</p>
                 </div>
 
                 <div className="space-y-1">

@@ -198,6 +198,8 @@ export default function App() {
       <Suspense fallback={<ScreenLoader />}>
         <Login 
           users={users} 
+          parkingName={config?.parkingLotConfig?.name || 'ParkGestor'}
+          logoUrl={config?.parkingLotConfig?.logoUrl}
           onLoginSuccess={(userId) => {
             handleUserChange(userId);
             setIsLoggedIn(true);

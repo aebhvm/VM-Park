@@ -35,6 +35,7 @@ export interface DatabaseSchema {
     totalSpaces: number;
     toleranceMinutes: number;
     allowMidnightOver: boolean;
+    logoUrl?: string;
     lgpdTerm?: string;
     lgpdDpoName?: string;
     lgpdDpoEmail?: string;
@@ -51,6 +52,8 @@ const defaultData: DatabaseSchema = {
       id: 'user-1',
       name: 'Carlos Alberto (Admin)',
       email: 'admin@parkgestor.com.br',
+      username: 'admin',
+      password: '123456',
       role: 'admin',
       active: true,
       createdAt: new Date().toISOString()
@@ -59,6 +62,8 @@ const defaultData: DatabaseSchema = {
       id: 'user-2',
       name: 'Renata Souza (Gerente)',
       email: 'gerente@parkgestor.com.br',
+      username: 'gerente',
+      password: '123456',
       role: 'manager',
       active: true,
       createdAt: new Date().toISOString()
@@ -67,6 +72,8 @@ const defaultData: DatabaseSchema = {
       id: 'user-3',
       name: 'Lucas Lima (Operador)',
       email: 'operador@parkgestor.com.br',
+      username: 'operador',
+      password: '123456',
       role: 'operator',
       active: true,
       createdAt: new Date().toISOString()
@@ -339,6 +346,7 @@ const defaultData: DatabaseSchema = {
     totalSpaces: 90,
     toleranceMinutes: 15,
     allowMidnightOver: true,
+    logoUrl: '',
     lgpdTerm: 'Os dados de placa e veículo são coletados estritamente para controle operacional e faturamento de permanência, sob amparo legal de execução de contrato e legítimo interesse (Art. 7º, V e IX da Lei 13.709/18). Os registros históricos são retidos temporariamente e anonimizados após o prazo regulatório de faturamento.',
     lgpdDpoName: 'Renata Souza (Gerente)',
     lgpdDpoEmail: 'dpo@parkgestor.com.br',

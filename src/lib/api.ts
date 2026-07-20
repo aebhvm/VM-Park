@@ -1,6 +1,6 @@
 import { 
   ParkingSession, CashSession, FinancialTransaction, 
-  Subscriber, Expense, AuditLog 
+  Subscriber, Expense, AuditLog, User
 } from '../types';
 
 // Simple simulated auth header
@@ -33,6 +33,14 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  login: (identifier: string, password: string) => request<User>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ identifier, password })
+  }),
+  resetPassword: (email: string, password: string) => request<void>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  }),
   getConfig: () => request<any>('/api/config'),
   updateConfig: (config: any) => request<any>('/api/config', { method: 'PUT', body: JSON.stringify(config) }),
   updatePricingPlan: (data: any) => request<any>('/api/pricing-plans', { method: 'PUT', body: JSON.stringify(data) }),

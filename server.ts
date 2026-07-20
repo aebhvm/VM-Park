@@ -16,6 +16,53 @@ const app = express();
 
 app.use(express.json());
 
+const normalizeLoginIdentifier = (value: unknown) => String(value || '').trim().toLocaleLowerCase('pt-BR');
+
+// Login simples do painel. As senhas atuais de demonstração sem cadastro explícito são 123456.
+app.post('/api/auth/login', async (req, res) => {
+  const identifier = normalizeLoginIdentifier(req.body.identifier);
+  const password = String(req.body.password || '');
+
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Informe usuário ou e-mail e a senha.' });
+  }
+
+  const db = await getDb();
+  const user = db.users.find((item) => {
+    const username = normalizeLoginIdentifier(item.username || item.email.split('@')[0]);
+    return item.active && [username, normalizeLoginIdentifier(item.email), normalizeLoginIdentifier(item.name)].includes(identifier);
+  });
+
+  if (!user || (user.password || '123456') !== password) {
+    return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
+  }
+
+  user.lastLoginAt = new Date().toISOString();
+  await saveDb(db);
+  res.json(user);
+});
+
+// O formulário de recuperação confirma o e-mail cadastrado antes de registrar a nova senha.
+app.post('/api/auth/reset-password', async (req, res) => {
+  const email = normalizeLoginIdentifier(req.body.email);
+  const password = String(req.body.password || '');
+
+  if (!email || !password || password.length < 6) {
+    return res.status(400).json({ error: 'Informe o e-mail cadastrado e uma nova senha com pelo menos 6 caracteres.' });
+  }
+
+  const db = await getDb();
+  const user = db.users.find((item) => normalizeLoginIdentifier(item.email) === email && item.active);
+  if (!user) {
+    return res.status(404).json({ error: 'Não encontramos um colaborador ativo com este e-mail.' });
+  }
+
+  user.password = password;
+  await saveDb(db);
+  await addAuditLog(user.id, user.name, 'Redefiniu a senha pelo formulário de recuperação', 'Usuário', user.id);
+  res.status(204).send();
+});
+
 // Helper: Get active user from request header (to simulate authenticating user)
 async function getReqUser(req: express.Request) {
   const userId = req.headers['x-user-id'] as string || 'user-3'; // Default to Lucas Lima (Operador)
@@ -211,18 +258,24 @@ app.post('/api/users', async (req, res) => {
   }
   
   const db = await getDb();
-  const { name, email, role } = req.body;
+  const { name, email, username, password, role } = req.body;
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
   }
   if (db.users.some(user => user.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
   }
+  const cleanUsername = (username || email.split('@')[0]).trim().toLowerCase();
+  if (db.users.some(user => (user.username || user.email.split('@')[0]).toLowerCase() === cleanUsername)) {
+    return res.status(409).json({ error: 'Já existe um usuário cadastrado com este nome de usuário.' });
+  }
   
   const newUser = {
     id: `user-${Date.now()}`,
     name: name.trim(),
     email: email.trim().toLowerCase(),
+    username: cleanUsername,
+    password: password?.trim() || '123456',
     role,
     active: true,
     createdAt: new Date().toISOString()
@@ -247,7 +300,7 @@ app.put('/api/users/:id', async (req, res) => {
     return res.status(404).json({ error: 'Usuário não encontrado.' });
   }
   
-  const { name, email, role, active } = req.body;
+  const { name, email, username, password, role, active } = req.body;
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
   }
@@ -260,9 +313,20 @@ app.put('/api/users/:id', async (req, res) => {
   if (db.users.some(u => u.id !== userToEdit.id && u.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
   }
+  const cleanUsername = (username || email.split('@')[0]).trim().toLowerCase();
+  if (db.users.some(u => u.id !== userToEdit.id && (u.username || u.email.split('@')[0]).toLowerCase() === cleanUsername)) {
+    return res.status(409).json({ error: 'Já existe um usuário cadastrado com este nome de usuário.' });
+  }
 
   const oldUser = { ...userToEdit };
-  Object.assign(userToEdit, { name: name.trim(), email: email.trim().toLowerCase(), role, active: active !== false });
+  Object.assign(userToEdit, {
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    username: cleanUsername,
+    ...(password?.trim() ? { password: password.trim() } : {}),
+    role,
+    active: active !== false
+  });
   await saveDb(db);
   
   await addAuditLog(actor.id, actor.name, `Editou Usuário: ${userToEdit.name}`, 'Usuário', userToEdit.id, oldUser, userToEdit);
