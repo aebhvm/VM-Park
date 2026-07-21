@@ -8,9 +8,7 @@ import { User } from '../types';
 interface NavigationProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
-  users: User[];
   currentUser: User;
-  onUserChange: (userId: string) => void;
   parkingName: string;
   theme: 'light' | 'obsidian' | 'cyber';
   setTheme: (theme: 'light' | 'obsidian' | 'cyber') => void;
@@ -20,9 +18,7 @@ interface NavigationProps {
 export default function Navigation({
   currentTab,
   setCurrentTab,
-  users,
   currentUser,
-  onUserChange,
   parkingName,
   theme,
   setTheme,
@@ -185,34 +181,18 @@ export default function Navigation({
                       id="user-profile-dropdown"
                       className="absolute right-0 mt-2 w-64 rounded-xl bg-app-card border border-app-border shadow-xl text-app-text py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                     >
-                      <div className="px-4 py-2.5 border-b border-app-border bg-app-bg/30">
+                      <div className="px-4 py-3 border-b border-app-border bg-app-bg/30">
                         <p className="text-[10px] font-bold text-app-subtle uppercase tracking-widest flex items-center gap-1">
                           <Shield className="w-3.5 h-3.5 text-indigo-500" />
-                          Simular Operador
+                          Funcionário logado
                         </p>
-                        <p className="text-[9px] text-app-muted mt-1 leading-relaxed">
-                          Selecione o operador abaixo para simular as permissões de acesso do caixa.
-                        </p>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto py-1">
-                        {users.map(u => (
-                          <button
-                            key={u.id}
-                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-app-bg transition duration-100 ${
-                              u.id === currentUser.id ? 'bg-app-bg/70 font-bold text-indigo-600 dark:text-indigo-400 border-l-2 border-indigo-600' : 'text-app-text'
-                            }`}
-                            onClick={() => {
-                              onUserChange(u.id);
-                              setUserDropdownOpen(false);
-                            }}
-                          >
-                            <div>
-                              <p className="text-xs font-bold leading-tight">{u.name}</p>
-                              <p className="text-[10px] text-app-subtle mt-0.5">{u.email}</p>
-                            </div>
-                            {getRoleBadge(u.role)}
-                          </button>
-                        ))}
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold leading-tight truncate">{currentUser.name}</p>
+                            <p className="text-[10px] text-app-subtle mt-0.5 truncate">{currentUser.email}</p>
+                          </div>
+                          {getRoleBadge(currentUser.role)}
+                        </div>
                       </div>
                       
                       <div className="border-t border-app-border mt-1 pt-1 bg-rose-500/5 dark:bg-rose-950/5">

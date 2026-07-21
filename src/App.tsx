@@ -239,9 +239,7 @@ export default function App() {
         <Navigation
           currentTab={currentTab}
           setCurrentTab={setCurrentTab}
-          users={users}
           currentUser={currentUser}
-          onUserChange={handleUserChange}
           parkingName={parkingName}
           theme={theme}
           setTheme={setTheme}
