@@ -5,13 +5,11 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
-  formatCpfCnpj,
   formatCurrencyInput,
   formatCurrencyValue,
   formatPhone,
   formatPlate,
   isValidPlate,
-  normalizeDocument,
   normalizePhone,
   normalizePlate,
   parseCurrency
@@ -46,12 +44,7 @@ export default function AdminConfig({
 
   // --- SUBTAB 1: Configuration state ---
   const [lotName, setLotName] = useState(parkingConfig?.name || '');
-  const [lotDoc, setLotDoc] = useState(formatCpfCnpj(parkingConfig?.document || ''));
-  const [lotPhone, setLotPhone] = useState(formatPhone(parkingConfig?.phone || ''));
-  const [lotAddress, setLotAddress] = useState(parkingConfig?.address || '');
   const [lotLogoUrl, setLotLogoUrl] = useState(parkingConfig?.logoUrl || '');
-  const [lotSpaces, setLotSpaces] = useState(parkingConfig?.totalSpaces?.toString() || '90');
-  const [lotTolerance, setLotTolerance] = useState(parkingConfig?.toleranceMinutes?.toString() || '15');
   const [configLoading, setConfigLoading] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -123,6 +116,30 @@ export default function AdminConfig({
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setConfigError('Selecione uma imagem PNG ou JPG.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setConfigError('A logo deve ter no máximo 1 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLotLogoUrl(String(reader.result || ''));
+      setConfigError(null);
+    };
+    reader.onerror = () => setConfigError('Não foi possível ler a imagem selecionada.');
+    reader.readAsDataURL(file);
+  };
+
   const handleConfigSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setConfigLoading(true);
@@ -132,12 +149,7 @@ export default function AdminConfig({
       await api.updateConfig({
         ...parkingConfig,
         name: lotName,
-        document: normalizeDocument(lotDoc),
-        phone: normalizePhone(lotPhone),
-        address: lotAddress,
-        logoUrl: lotLogoUrl.trim(),
-        totalSpaces: parseInt(lotSpaces),
-        toleranceMinutes: parseInt(lotTolerance)
+        logoUrl: lotLogoUrl.trim()
       });
       setConfigSuccess(true);
       onRefresh();
@@ -409,10 +421,10 @@ export default function AdminConfig({
         {activeSubTab === 'config' && (
           <div className="max-w-2xl theme-card p-4">
             <h3 className="font-bold text-app-text text-[11px] uppercase tracking-wider mb-1">Configurações Cadastrais</h3>
-            <p className="text-[10px] text-app-muted mb-4">Dados impressos nos comprovantes físicos e chaves fiscais.</p>
+            <p className="text-[10px] text-app-muted mb-4">Defina somente o nome da empresa e a logo exibidos no sistema.</p>
 
             <form onSubmit={handleConfigSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3 bg-app-bg p-3 rounded border border-app-border">
+              <div className="space-y-3 bg-app-bg p-3 rounded border border-app-border">
                 <div className="col-span-2 space-y-1">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">NOME FANTASIA / RAZÃO SOCIAL *</label>
                   <input
@@ -423,83 +435,29 @@ export default function AdminConfig({
                     required
                   />
                 </div>
-                
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">CNPJ OU CPF DO ESTABELECIMENTO *</label>
+                <div className="col-span-2 space-y-2">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">LOGO DA EMPRESA (PNG OU JPG)</label>
                   <input
-                    type="text"
-                    value={lotDoc}
-                    onChange={(e) => setLotDoc(formatCpfCnpj(e.target.value))}
-                    inputMode="numeric"
-                    maxLength={18}
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-                    required
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    onChange={handleLogoFileChange}
+                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 file:mr-3 file:border-0 file:bg-indigo-600 file:px-2.5 file:py-1 file:text-[9px] file:font-bold file:text-white"
                   />
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TELEFONE GERAL CONTATO *</label>
-                  <input
-                    type="tel"
-                    value={lotPhone}
-                    onChange={(e) => setLotPhone(formatPhone(e.target.value))}
-                    inputMode="tel"
-                    maxLength={15}
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-                    required
-                  />
+                  <p className="text-[9px] text-app-subtle">Envie uma imagem PNG ou JPG de até 1 MB. Ela será exibida na tela de acesso após salvar.</p>
+                  {lotLogoUrl && (
+                    <div className="flex items-center gap-3 rounded border border-app-border bg-app-card p-2">
+                      <img src={lotLogoUrl} alt="Prévia da logo" className="h-12 max-w-40 rounded bg-white object-contain p-1" />
+                      <button type="button" onClick={() => setLotLogoUrl('')} className="text-[9px] font-bold uppercase text-rose-500 hover:text-rose-600">Remover logo</button>
+                    </div>
+                  )}
                 </div>
 
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">ENDEREÇO LOGRADOURO COMPLETO</label>
-                  <input
-                    type="text"
-                    value={lotAddress}
-                    onChange={(e) => setLotAddress(e.target.value)}
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 uppercase font-mono"
-                    required
-                  />
-                </div>
-
-                <div className="col-span-2 space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">LOGO DA EMPRESA (URL DA IMAGEM)</label>
-                  <input
-                    type="url"
-                    value={lotLogoUrl}
-                    onChange={(e) => setLotLogoUrl(e.target.value)}
-                    placeholder="https://suaempresa.com/logo.png"
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500"
-                  />
-                  <p className="text-[9px] text-app-subtle">Cole o endereço público da imagem para exibi-la na tela de acesso. Deixe em branco para usar a marca padrão.</p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">QUANTIDADE TOTAL DE VAGAS</label>
-                  <input
-                    type="number"
-                    value={lotSpaces}
-                    onChange={(e) => setLotSpaces(e.target.value)}
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 text-center font-mono"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TOLERÂNCIA DE SAÍDA / ENTRADA (MINUTOS)</label>
-                  <input
-                    type="number"
-                    value={lotTolerance}
-                    onChange={(e) => setLotTolerance(e.target.value)}
-                    className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 text-center font-mono"
-                    required
-                  />
-                </div>
               </div>
 
               {currentUser.role !== 'admin' && (
                 <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[9px] flex items-center gap-2 uppercase">
                   <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>Acesso Restrito: Apenas Administradores podem salvar configurações fiscais.</span>
+                  <span>Acesso Restrito: Apenas Administradores podem alterar a identidade da empresa.</span>
                 </div>
               )}
 

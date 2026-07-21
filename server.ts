@@ -131,6 +131,12 @@ app.put('/api/config', async (req, res) => {
   const db = await getDb();
   const oldConfig = { ...db.parkingLotConfig };
   const configUpdates = { ...req.body };
+  if (configUpdates.logoUrl !== undefined && configUpdates.logoUrl !== '') {
+    const isImage = typeof configUpdates.logoUrl === 'string' && /^data:image\/(png|jpeg);base64,/i.test(configUpdates.logoUrl);
+    if (!isImage || configUpdates.logoUrl.length > 1_400_000) {
+      return res.status(400).json({ error: 'A logo deve ser uma imagem PNG ou JPG de até 1 MB.' });
+    }
+  }
   if (configUpdates.document !== undefined) configUpdates.document = normalizeDocument(configUpdates.document);
   if (configUpdates.phone !== undefined) configUpdates.phone = normalizePhone(configUpdates.phone);
   if (configUpdates.lgpdDpoPhone !== undefined) configUpdates.lgpdDpoPhone = normalizePhone(configUpdates.lgpdDpoPhone);
