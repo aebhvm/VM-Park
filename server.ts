@@ -262,6 +262,9 @@ app.post('/api/users', async (req, res) => {
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
   }
+  if (password?.trim() && password.trim().length < 6) {
+    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
+  }
   if (db.users.some(user => user.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
   }
@@ -303,6 +306,9 @@ app.put('/api/users/:id', async (req, res) => {
   const { name, email, username, password, role, active } = req.body;
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
+  }
+  if (password?.trim() && password.trim().length < 6) {
+    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
   }
   if (userToEdit.id === actor.id && active === false) {
     return res.status(400).json({ error: 'Você não pode desativar o próprio acesso.' });

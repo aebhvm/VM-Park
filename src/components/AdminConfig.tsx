@@ -112,6 +112,7 @@ export default function AdminConfig({
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState<'admin' | 'manager' | 'operator'>('operator');
   const [newUserActive, setNewUserActive] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -281,8 +282,12 @@ export default function AdminConfig({
 
   const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName.trim() || !newUserEmail.trim()) {
-      setUserError('Preencha o nome e e-mail do colaborador.');
+    if (!newUserName.trim() || !newUserEmail.trim() || (!editingUser && !newUserPassword)) {
+      setUserError('Preencha o nome, e-mail e senha do colaborador.');
+      return;
+    }
+    if (newUserPassword && newUserPassword.length < 6) {
+      setUserError('A senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -292,6 +297,7 @@ export default function AdminConfig({
       const userData = {
         name: newUserName,
         email: newUserEmail,
+        password: newUserPassword,
         role: newUserRole,
         active: newUserActive
       };
@@ -304,6 +310,7 @@ export default function AdminConfig({
       setEditingUser(null);
       setNewUserName('');
       setNewUserEmail('');
+      setNewUserPassword('');
       setNewUserRole('operator');
       setNewUserActive(true);
       onRefresh();
@@ -318,6 +325,7 @@ export default function AdminConfig({
     setEditingUser(user || null);
     setNewUserName(user?.name || '');
     setNewUserEmail(user?.email || '');
+    setNewUserPassword('');
     setNewUserRole(user?.role || 'operator');
     setNewUserActive(user?.active ?? true);
     setUserError(null);
@@ -1288,6 +1296,22 @@ export default function AdminConfig({
                         placeholder="AMANDA@PARKGESTOR.COM"
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-app-muted/30 lowercase"
                         required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">
+                        {editingUser ? 'NOVA SENHA (OPCIONAL)' : 'SENHA DE ACESSO *'}
+                      </label>
+                      <input
+                        type="password"
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        placeholder={editingUser ? 'DEIXE EM BRANCO PARA MANTER A SENHA' : 'MÍNIMO DE 6 CARACTERES'}
+                        minLength={newUserPassword ? 6 : undefined}
+                        required={!editingUser}
+                        autoComplete="new-password"
+                        className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"
                       />
                     </div>
 
