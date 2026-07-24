@@ -123,6 +123,7 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(sub)
   }),
+  deleteSubscriber: (id: string) => request<Subscriber>(`/api/subscribers/${id}`, { method: 'DELETE' }),
   paySubscription: (id: string, paymentMethod: string) => request<{ subscriber: Subscriber; transaction: FinancialTransaction }>(`/api/subscribers/${id}/pay`, {
     method: 'POST',
     body: JSON.stringify({ paymentMethod })

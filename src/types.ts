@@ -85,6 +85,8 @@ export interface Subscriber {
   amount: number;
   plates: string[]; // Plates allowed
   notes?: string;
+  deletedAt?: string;
+  deletedById?: string;
   createdAt: string;
   updatedAt: string;
 }

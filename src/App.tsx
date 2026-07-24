@@ -80,7 +80,7 @@ export default function App() {
         api.getCashSessions(),
         api.getSubscribers(),
         api.getExpenses(),
-        api.getAuditLogs()
+        activeUser.role === 'operator' ? Promise.resolve([]) : api.getAuditLogs()
       ]);
 
       setStats(statsData);

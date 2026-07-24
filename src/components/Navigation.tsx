@@ -66,28 +66,17 @@ export default function Navigation({
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentTab('dashboard')}>
                 <div className="w-9 h-9 rounded-lg bg-[#1E4E44] flex items-center justify-center text-[#C5B08E] shadow-md shadow-indigo-600/10 border border-[#C5B08E]/20 shrink-0">
                   <svg viewBox="0 0 100 100" className="w-6 h-6 text-[#C5B08E]" fill="none" stroke="currentColor" strokeWidth="4">
-                    {/* Circular border */}
-                    <circle cx="50" cy="50" r="44" strokeWidth="4" fill="none" />
-                    {/* Pillars */}
+                    <circle cx="50" cy="50" r="44" strokeWidth="4" />
                     <line x1="33" y1="52" x2="33" y2="73" strokeWidth="5.5" strokeLinecap="round" />
                     <line x1="67" y1="52" x2="67" y2="73" strokeWidth="5.5" strokeLinecap="round" />
-                    {/* Inner arch */}
                     <path d="M 39 73 A 11 11 0 0 1 61 73" strokeWidth="4.5" strokeLinecap="round" />
-                    {/* Lintel/horizontal beam */}
                     <line x1="26" y1="52" x2="74" y2="52" strokeWidth="6" strokeLinecap="round" />
                     <line x1="29" y1="47" x2="71" y2="47" strokeWidth="3.5" strokeLinecap="round" />
-                    {/* Top dome/arch cap */}
                     <path d="M 33 47 C 33 28, 67 28, 67 47" strokeWidth="4.5" fill="none" strokeLinecap="round" />
                     <path d="M 40 40 C 40 33, 60 33, 60 40" strokeWidth="2.5" fill="none" strokeLinecap="round" />
                   </svg>
                 </div>
-                <div>
-                  <h1 className="text-sm font-extrabold tracking-tight text-app-text flex items-center gap-2 theme-font-title">
-                    {parkingName}
-                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest">v4.2</span>
-                  </h1>
-                  <p className="text-[10px] text-app-subtle font-medium leading-none mt-0.5 uppercase tracking-wider">Unidade Centro</p>
-                </div>
+                <h1 className="text-sm font-extrabold tracking-tight text-app-text theme-font-title uppercase">VM Parking</h1>
               </div>
 
               {/* Desktop Centered Horizontal Navigation */}

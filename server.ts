@@ -756,7 +756,7 @@ app.post('/api/cash/close', async (req, res) => {
 // 6. SUBSCRIBERS (MENSALISTAS) API
 app.get('/api/subscribers', async (req, res) => {
   const db = await getDb();
-  res.json(db.subscribers);
+  res.json(db.subscribers.filter(subscriber => !subscriber.deletedAt));
 });
 
 app.post('/api/subscribers', async (req, res) => {
@@ -818,7 +818,7 @@ app.post('/api/subscribers', async (req, res) => {
 app.put('/api/subscribers/:id', async (req, res) => {
   const user = await getReqUser(req);
   const db = await getDb();
-  const sub = db.subscribers.find(s => s.id === req.params.id);
+  const sub = db.subscribers.find(s => s.id === req.params.id && !s.deletedAt);
   if (!sub) return res.status(404).json({ error: 'Mensalista não encontrado.' });
   
   const oldSub = { ...sub };
@@ -850,11 +850,31 @@ app.put('/api/subscribers/:id', async (req, res) => {
   res.json(sub);
 });
 
+app.delete('/api/subscribers/:id', async (req, res) => {
+  const user = await getReqUser(req);
+  if (!['admin', 'manager'].includes(user.role)) {
+    return res.status(403).json({ error: 'Apenas Administradores e Gestores podem excluir mensalistas.' });
+  }
+
+  const db = await getDb();
+  const sub = db.subscribers.find(s => s.id === req.params.id && !s.deletedAt);
+  if (!sub) return res.status(404).json({ error: 'Mensalista não encontrado.' });
+
+  const oldSub = { ...sub };
+  sub.deletedAt = new Date().toISOString();
+  sub.deletedById = user.id;
+  sub.updatedAt = sub.deletedAt;
+  await saveDb(db);
+
+  await addAuditLog(user.id, user.name, `Excluiu Mensalista: ${sub.name}`, 'Mensalista', sub.id, oldSub, sub, 'Exclusão lógica solicitada no cadastro de mensalistas.');
+  res.json(sub);
+});
+
 // Pay monthly bill and renew
 app.post('/api/subscribers/:id/pay', async (req, res) => {
   const user = await getReqUser(req);
   const db = await getDb();
-  const sub = db.subscribers.find(s => s.id === req.params.id);
+  const sub = db.subscribers.find(s => s.id === req.params.id && !s.deletedAt);
   if (!sub) return res.status(404).json({ error: 'Mensalista não encontrado.' });
   
   const activeCash = db.cashSessions.find(c => c.userId === user.id && c.status === 'open');
@@ -974,6 +994,10 @@ app.post('/api/expenses', async (req, res) => {
 
 // 8. AUDIT LOGS
 app.get('/api/audit-logs', async (req, res) => {
+  const user = await getReqUser(req);
+  if (!['admin', 'manager'].includes(user.role)) {
+    return res.status(403).json({ error: 'Apenas Administradores e Gestores podem consultar a auditoria.' });
+  }
   const db = await getDb();
   res.json(db.auditLogs);
 });

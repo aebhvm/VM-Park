@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { 
   Settings, Users, ClipboardList, Coins, AlertCircle, CheckCircle2, 
-  Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X, Pencil
+  Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X, Pencil, Download
 } from 'lucide-react';
 import { api } from '../lib/api';
+import * as XLSX from 'xlsx';
 import {
+  formatCpfCnpj,
   formatCurrencyInput,
   formatCurrencyValue,
   formatPhone,
   formatPlate,
   isValidPlate,
+  normalizeDocument,
   normalizePhone,
   normalizePlate,
   parseCurrency
@@ -44,7 +47,12 @@ export default function AdminConfig({
 
   // --- SUBTAB 1: Configuration state ---
   const [lotName, setLotName] = useState(parkingConfig?.name || '');
+  const [lotDoc, setLotDoc] = useState(formatCpfCnpj(parkingConfig?.document || ''));
+  const [lotPhone, setLotPhone] = useState(formatPhone(parkingConfig?.phone || ''));
+  const [lotAddress, setLotAddress] = useState(parkingConfig?.address || '');
   const [lotLogoUrl, setLotLogoUrl] = useState(parkingConfig?.logoUrl || '');
+  const [lotSpaces, setLotSpaces] = useState(parkingConfig?.totalSpaces?.toString() || '90');
+  const [lotTolerance, setLotTolerance] = useState(parkingConfig?.toleranceMinutes?.toString() || '15');
   const [configLoading, setConfigLoading] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -112,8 +120,45 @@ export default function AdminConfig({
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
 
+  const toDateInput = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+  };
+  const [auditStartDate, setAuditStartDate] = useState(() => {
+    const today = new Date();
+    return toDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
+  });
+  const [auditEndDate, setAuditEndDate] = useState(() => toDateInput(new Date()));
+
   const formatBRL = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const logDate = new Date(log.createdAt);
+    const startDate = auditStartDate ? new Date(`${auditStartDate}T00:00:00`) : null;
+    const endDate = auditEndDate ? new Date(`${auditEndDate}T23:59:59.999`) : null;
+    return (!startDate || logDate >= startDate) && (!endDate || logDate <= endDate);
+  });
+
+  const handleExportAuditReport = () => {
+    const reportRows = filteredAuditLogs.map(log => ({
+      Data: new Date(log.createdAt).toLocaleDateString('pt-BR'),
+      Horário: new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      Colaborador: log.userName,
+      Ação: log.action,
+      Módulo: log.entityType,
+      Justificativa: log.reason || '',
+      Identificador: log.entityId || ''
+    }));
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(reportRows);
+    worksheet['!cols'] = [
+      { wch: 13 }, { wch: 12 }, { wch: 26 }, { wch: 42 },
+      { wch: 18 }, { wch: 56 }, { wch: 18 }
+    ];
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Auditoria');
+    XLSX.writeFile(workbook, `relatorio-auditoria-${auditStartDate || 'inicio'}-a-${auditEndDate || 'fim'}.xlsx`);
   };
 
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,7 +194,12 @@ export default function AdminConfig({
       await api.updateConfig({
         ...parkingConfig,
         name: lotName,
-        logoUrl: lotLogoUrl.trim()
+        document: normalizeDocument(lotDoc),
+        phone: normalizePhone(lotPhone),
+        address: lotAddress,
+        logoUrl: lotLogoUrl.trim(),
+        totalSpaces: parseInt(lotSpaces),
+        toleranceMinutes: parseInt(lotTolerance)
       });
       setConfigSuccess(true);
       onRefresh();
@@ -421,10 +471,10 @@ export default function AdminConfig({
         {activeSubTab === 'config' && (
           <div className="max-w-2xl theme-card p-4">
             <h3 className="font-bold text-app-text text-[11px] uppercase tracking-wider mb-1">Configurações Cadastrais</h3>
-            <p className="text-[10px] text-app-muted mb-4">Defina somente o nome da empresa e a logo exibidos no sistema.</p>
+            <p className="text-[10px] text-app-muted mb-4">Dados impressos nos comprovantes físicos e chaves fiscais.</p>
 
             <form onSubmit={handleConfigSubmit} className="space-y-3">
-              <div className="space-y-3 bg-app-bg p-3 rounded border border-app-border">
+              <div className="grid grid-cols-2 gap-3 bg-app-bg p-3 rounded border border-app-border">
                 <div className="col-span-2 space-y-1">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">NOME FANTASIA / RAZÃO SOCIAL *</label>
                   <input
@@ -434,6 +484,21 @@ export default function AdminConfig({
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 uppercase"
                     required
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">CNPJ OU CPF DO ESTABELECIMENTO *</label>
+                  <input type="text" value={lotDoc} onChange={(e) => setLotDoc(formatCpfCnpj(e.target.value))} inputMode="numeric" maxLength={18} className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500" required />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TELEFONE GERAL CONTATO *</label>
+                  <input type="tel" value={lotPhone} onChange={(e) => setLotPhone(formatPhone(e.target.value))} inputMode="tel" maxLength={15} className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500" required />
+                </div>
+
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">ENDEREÇO LOGRADOURO COMPLETO</label>
+                  <input type="text" value={lotAddress} onChange={(e) => setLotAddress(e.target.value)} className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 uppercase font-mono" required />
                 </div>
                 <div className="col-span-2 space-y-2">
                   <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">LOGO DA EMPRESA (PNG OU JPG)</label>
@@ -452,12 +517,22 @@ export default function AdminConfig({
                   )}
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">QUANTIDADE TOTAL DE VAGAS</label>
+                  <input type="number" value={lotSpaces} onChange={(e) => setLotSpaces(e.target.value)} className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 text-center font-mono" required />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-app-muted uppercase tracking-widest block">TOLERÂNCIA DE SAÍDA / ENTRADA (MINUTOS)</label>
+                  <input type="number" value={lotTolerance} onChange={(e) => setLotTolerance(e.target.value)} className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 text-center font-mono" required />
+                </div>
+
               </div>
 
               {currentUser.role !== 'admin' && (
                 <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded text-[9px] flex items-center gap-2 uppercase">
                   <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>Acesso Restrito: Apenas Administradores podem alterar a identidade da empresa.</span>
+                  <span>Acesso Restrito: Apenas Administradores podem salvar configurações fiscais.</span>
                 </div>
               )}
 
@@ -1089,6 +1164,38 @@ export default function AdminConfig({
         {/* SUBTAB 3: AUDITS */}
         {activeSubTab === 'audits' && (
           <div className="theme-card p-4">
+            <div className="mb-4 flex flex-col gap-3 rounded border border-app-border bg-app-bg p-3 md:flex-row md:items-end md:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <label className="flex flex-col gap-1 text-[9px] font-bold uppercase text-app-muted">
+                  Data inicial
+                  <input
+                    type="date"
+                    value={auditStartDate}
+                    onChange={(event) => setAuditStartDate(event.target.value)}
+                    className="rounded border border-app-border bg-app-card px-2 py-1.5 text-[10px] text-app-text outline-none focus:border-indigo-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[9px] font-bold uppercase text-app-muted">
+                  Data final
+                  <input
+                    type="date"
+                    value={auditEndDate}
+                    min={auditStartDate || undefined}
+                    onChange={(event) => setAuditEndDate(event.target.value)}
+                    className="rounded border border-app-border bg-app-card px-2 py-1.5 text-[10px] text-app-text outline-none focus:border-indigo-500"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportAuditReport}
+                disabled={filteredAuditLogs.length === 0}
+                className="flex items-center justify-center gap-2 rounded bg-emerald-600 px-3 py-2 text-[10px] font-bold uppercase text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar Excel ({filteredAuditLogs.length})
+              </button>
+            </div>
             <h3 className="font-bold text-app-text text-[11px] uppercase tracking-wider mb-1">Rastreabilidade de Auditoria</h3>
             <p className="text-[10px] text-app-muted mb-4">Log transparente de exclusões, sangrias, cancelamentos e estornos.</p>
 
@@ -1104,7 +1211,7 @@ export default function AdminConfig({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border">
-                  {auditLogs.map(log => (
+                  {filteredAuditLogs.map(log => (
                     <tr key={log.id} className="hover:bg-app-bg/40 text-app-text">
                       <td className="p-2.5 text-app-subtle whitespace-nowrap font-mono">
                         {new Date(log.createdAt).toLocaleDateString('pt-BR')} {new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -1126,7 +1233,7 @@ export default function AdminConfig({
                       </td>
                     </tr>
                   ))}
-                  {auditLogs.length === 0 && (
+                  {filteredAuditLogs.length === 0 && (
                     <tr>
                       <td colSpan={5} className="text-center py-8 text-app-subtle font-bold">NENHUM REGISTRO DE AUDITORIA DISPONÍVEL.</td>
                     </tr>

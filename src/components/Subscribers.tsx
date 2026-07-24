@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Users, Search, PlusCircle, CreditCard, ShieldAlert, CheckCircle, 
-  X, AlertTriangle, Edit3, CheckCircle2, UserPlus, Info, RefreshCw 
+  X, AlertTriangle, Edit3, CheckCircle2, UserPlus, Info, RefreshCw, Trash2
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Subscriber, SubscriberPlan } from '../types';
@@ -71,6 +71,7 @@ export default function Subscribers({
   const [payMethod, setPayMethod] = useState<'dinheiro' | 'pix' | 'debito' | 'credito'>('pix');
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
 
   const formatBRL = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -234,6 +235,23 @@ export default function Subscribers({
       setPayLoading(false);
     }
   };
+
+  const handleDeleteSubscriber = async (subscriber: Subscriber) => {
+    const confirmed = window.confirm(
+      `Excluir o mensalista ${subscriber.name}? O cadastro sairá da lista operacional, mas permanecerá registrado na auditoria.`
+    );
+    if (!confirmed) return;
+
+    setDeleteLoadingId(subscriber.id);
+    try {
+      await api.deleteSubscriber(subscriber.id);
+      onRefresh();
+    } catch (err: any) {
+      window.alert(err.message || 'Não foi possível excluir o mensalista.');
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
   return (
     <div className="space-y-6 pb-24 md:pb-6 text-sm animate-in fade-in duration-100 transition-all">
       {/* Header */}
@@ -370,6 +388,17 @@ export default function Subscribers({
                       <Edit3 className="w-3 h-3" />
                       <span>EDITAR</span>
                     </button>
+                    {currentUser.role !== 'operator' && (
+                      <button
+                        onClick={() => handleDeleteSubscriber(s)}
+                        disabled={deleteLoadingId === s.id}
+                        title={`Excluir ${s.name}`}
+                        className="flex items-center justify-center gap-1 py-1 px-2 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded text-[9px] font-bold uppercase transition cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>{deleteLoadingId === s.id ? 'EXCLUINDO...' : 'EXCLUIR'}</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => setPayModalSub(s)}
                       className="flex-1 flex items-center justify-center gap-1 py-1 bg-app-bg hover:bg-app-border border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded text-[9px] font-bold uppercase transition cursor-pointer"
