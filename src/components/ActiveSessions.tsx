@@ -525,7 +525,7 @@ Obrigado pela preferência.
                     }}
                     className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-[9px] uppercase tracking-wider transition cursor-pointer"
                   >
-                    CONCLUIR TRANSACÇÃO
+                    CONCLUIR TRANSAÇÃO
                   </button>
                 </div>
               </div>

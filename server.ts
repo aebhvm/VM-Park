@@ -46,7 +46,7 @@ const AUTH_MAX_ATTEMPTS = 8;
 
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET || process.env.DATABASE_URL;
-  if (!secret) throw new Error('SESSION_SECRET ou DATABASE_URL Ã© obrigatÃ³rio para autenticar o acesso.');
+  if (!secret) throw new Error('SESSION_SECRET ou DATABASE_URL é obrigatório para autenticar o acesso.');
   return secret;
 }
 
@@ -91,11 +91,11 @@ app.use('/api', async (req, res, next) => {
   const authorization = req.headers.authorization;
   const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
   const userId = getSessionUserId(token, getSessionSecret());
-  if (!userId) return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou expirada. Entre novamente.' });
+  if (!userId) return res.status(401).json({ error: 'Sessão inválida ou expirada. Entre novamente.' });
 
   const db = await getDb();
   const user = db.users.find(item => item.id === userId && item.active);
-  if (!user) return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou acesso desativado.' });
+  if (!user) return res.status(401).json({ error: 'Sessão inválida ou acesso desativado.' });
 
   req.authUser = user;
   next();
@@ -159,7 +159,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 function getReqUser(req: express.Request) {
-  if (!req.authUser) throw new Error('UsuÃ¡rio autenticado ausente na requisiÃ§Ã£o.');
+  if (!req.authUser) throw new Error('Usuário autenticado ausente na requisição.');
   return req.authUser;
 }
 
@@ -378,7 +378,7 @@ app.post('/api/users', async (req, res) => {
   }
   const passwordError = validatePassword(String(password || '').trim());
   if (!password?.trim() || passwordError) {
-    return res.status(400).json({ error: passwordError || 'Defina uma senha inicial para o novo usuÃ¡rio.' });
+    return res.status(400).json({ error: passwordError || 'Defina uma senha inicial para o novo usuário.' });
   }
   if (db.users.some(user => user.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });

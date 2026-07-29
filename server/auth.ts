@@ -25,7 +25,7 @@ export function sanitizeAuditData(value: unknown): unknown {
 
 export function validatePassword(password: string): string | null {
   if (password.length < 8) return 'A senha deve ter pelo menos 8 caracteres.';
-  if (password.length > 128) return 'A senha deve ter no mÃ¡ximo 128 caracteres.';
+  if (password.length > 128) return 'A senha deve ter no máximo 128 caracteres.';
   return null;
 }
 

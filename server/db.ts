@@ -53,7 +53,7 @@ function getInitialAdmin(): User[] {
   if (!email || !password) return [];
 
   const passwordError = validatePassword(password);
-  if (passwordError) throw new Error(`INITIAL_ADMIN_PASSWORD invÃ¡lida: ${passwordError}`);
+  if (passwordError) throw new Error(`INITIAL_ADMIN_PASSWORD inválida: ${passwordError}`);
 
   return [{
     id: 'user-initial-admin',
