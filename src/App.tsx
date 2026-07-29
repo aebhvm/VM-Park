@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
-import { api, getActiveUserId, setActiveUserId } from './lib/api';
+import { api, clearActiveSession, hasActiveSession } from './lib/api';
 import { User, VehicleType, ParkingSession, SubscriberPlan, Subscriber, CashSession, Expense, AuditLog } from './types';
 import Navigation from './components/Navigation';
 import { RefreshCw, AlertCircle } from 'lucide-react';
@@ -23,7 +23,7 @@ export default function App() {
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('isLoggedIn') === 'true';
+    return hasActiveSession();
   });
 
   useEffect(() => {
@@ -55,22 +55,16 @@ export default function App() {
     setError(null);
     try {
       // 1. Get configuration and system users first
-      const [configData, usersData] = await Promise.all([
+      const [configData, currentUserData, usersData] = await Promise.all([
         api.getConfig(),
+        api.getCurrentUser(),
         api.getUsers()
       ]);
       
       setConfig(configData);
       setUsers(usersData);
 
-      // Initialize or resolve current simulated user
-      const savedUserId = getActiveUserId();
-      let activeUser = usersData.find(u => u.id === savedUserId);
-      if (!activeUser) {
-        activeUser = usersData[2] || usersData[0]; // Fallback to Operator Lucas Lima
-        setActiveUserId(activeUser.id);
-      }
-      setCurrentUser(activeUser);
+      setCurrentUser(currentUserData);
 
       // 2. Fetch user-dependent and transactional datasets
       const [statsData, sessionsData, currentCashData, cashSessionsData, subscribersData, expensesData, auditLogsData] = await Promise.all([
@@ -80,7 +74,7 @@ export default function App() {
         api.getCashSessions(),
         api.getSubscribers(),
         api.getExpenses(),
-        activeUser.role === 'operator' ? Promise.resolve([]) : api.getAuditLogs()
+        currentUserData.role === 'operator' ? Promise.resolve([]) : api.getAuditLogs()
       ]);
 
       setStats(statsData);
@@ -92,7 +86,28 @@ export default function App() {
       setAuditLogs(auditLogsData);
     } catch (err: any) {
       console.error('Error loading ParkGestor data:', err);
+      if (String(err.message || '').includes('Sessão inválida') || String(err.message || '').includes('acesso desativado')) {
+        clearActiveSession();
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+        setError(null);
+        return;
+      }
       setError(err.message || 'Falha de comunicação com o servidor ParkGestor. Verifique se o backend está ativo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const publicConfig = await api.getPublicConfig();
+      setConfig(publicConfig);
+      if (hasActiveSession()) await fetchAllData();
+    } catch (err: any) {
+      setError(err.message || 'Falha ao iniciar o ParkGestor.');
     } finally {
       setLoading(false);
     }
@@ -100,40 +115,8 @@ export default function App() {
 
   // Trigger loading on mount
   useEffect(() => {
-    fetchAllData();
+    loadInitialData();
   }, []);
-
-  // When switching simulated user profiles
-  const handleUserChange = async (userId: string) => {
-    setActiveUserId(userId);
-    setLoading(true);
-    try {
-      const activeUser = users.find(u => u.id === userId);
-      if (activeUser) {
-        setCurrentUser(activeUser);
-        // Ensure we load their active cash session context and refresh stats
-        const [currentCash, cashSessionsData, statsData, sessionsData] = await Promise.all([
-          api.getCashStatus(),
-          api.getCashSessions(),
-          api.getDashboardStats(),
-          api.getSessions()
-        ]);
-        setCashStatus(currentCash);
-        setCashSessions(cashSessionsData);
-        setStats(statsData);
-        setSessions(sessionsData);
-        
-        // If switching to an operator who has no access to Administration tab, revert tab to dashboard
-        if (activeUser.role === 'operator' && currentTab === 'admin') {
-          setCurrentTab('dashboard');
-        }
-      }
-    } catch (err: any) {
-      console.error('Error switching simulated user context:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Quick action refresh handler to pass to children components
   const refreshStatsAndSessions = async () => {
@@ -145,7 +128,7 @@ export default function App() {
         api.getCashSessions(),
         api.getSubscribers(),
         api.getExpenses(),
-        api.getAuditLogs()
+        currentUser?.role === 'operator' ? Promise.resolve([]) : api.getAuditLogs()
       ]);
       setStats(statsData);
       setSessions(sessionsData);
@@ -160,9 +143,11 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.setItem('isLoggedIn', 'false');
+    clearActiveSession();
     setIsLoggedIn(false);
     setCurrentUser(null);
+    setUsers([]);
+    setCurrentTab('dashboard');
   };
 
   // Loading Screen Layout
@@ -192,17 +177,16 @@ export default function App() {
     );
   }
 
-  // If not logged in and users are loaded, render the Login screen!
-  if (!isLoggedIn && users.length > 0) {
+  // If not logged in, render the Login screen.
+  if (!isLoggedIn) {
     return (
       <Suspense fallback={<ScreenLoader />}>
         <Login 
-          users={users} 
           parkingName={config?.parkingLotConfig?.name || 'ParkGestor'}
           logoUrl={config?.parkingLotConfig?.logoUrl}
-          onLoginSuccess={(userId) => {
-            handleUserChange(userId);
+          onLoginSuccess={async () => {
             setIsLoggedIn(true);
+            await fetchAllData();
           }} 
         />
       </Suspense>

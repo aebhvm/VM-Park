@@ -1,5 +1,15 @@
 import express from 'express';
+import { randomBytes, randomInt } from 'node:crypto';
 import { getDb, saveDb, addAuditLog } from './server/db.js';
+import {
+  createSessionToken,
+  getSessionUserId,
+  hashPassword,
+  needsPasswordUpgrade,
+  toSafeUser,
+  validatePassword,
+  verifyPassword
+} from './server/auth.js';
 import {
   formatPlate,
   isValidPlate,
@@ -14,12 +24,88 @@ import type {
 
 const app = express();
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+  }
+  next();
+});
 
 const normalizeLoginIdentifier = (value: unknown) => String(value || '').trim().toLocaleLowerCase('pt-BR');
 
-// Login simples do painel. As senhas atuais de demonstração sem cadastro explícito são 123456.
+const authAttempts = new Map<string, { count: number; resetAt: number }>();
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_MAX_ATTEMPTS = 8;
+
+function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET || process.env.DATABASE_URL;
+  if (!secret) throw new Error('SESSION_SECRET ou DATABASE_URL Ã© obrigatÃ³rio para autenticar o acesso.');
+  return secret;
+}
+
+function getClientKey(req: express.Request): string {
+  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+}
+
+function canAttemptAuthentication(req: express.Request): boolean {
+  const key = getClientKey(req);
+  const now = Date.now();
+  const current = authAttempts.get(key);
+  return !current || current.resetAt < now || current.count < AUTH_MAX_ATTEMPTS;
+}
+
+function registerFailedAuthentication(req: express.Request) {
+  const key = getClientKey(req);
+  const now = Date.now();
+  const current = authAttempts.get(key);
+  if (!current || current.resetAt < now) {
+    authAttempts.set(key, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+    return;
+  }
+  current.count += 1;
+}
+
+function clearAuthenticationAttempts(req: express.Request) {
+  authAttempts.delete(getClientKey(req));
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      authUser?: import('./src/types.js').User;
+    }
+  }
+}
+
+const publicApiPaths = new Set(['/health', '/public-config', '/auth/login']);
+
+app.use('/api', async (req, res, next) => {
+  if (publicApiPaths.has(req.path)) return next();
+  const authorization = req.headers.authorization;
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
+  const userId = getSessionUserId(token, getSessionSecret());
+  if (!userId) return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou expirada. Entre novamente.' });
+
+  const db = await getDb();
+  const user = db.users.find(item => item.id === userId && item.active);
+  if (!user) return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou acesso desativado.' });
+
+  req.authUser = user;
+  next();
+});
+
+// Login do painel com sessão assinada no servidor.
 app.post('/api/auth/login', async (req, res) => {
+  if (!canAttemptAuthentication(req)) {
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.' });
+  }
   const identifier = normalizeLoginIdentifier(req.body.identifier);
   const password = String(req.body.password || '');
 
@@ -33,41 +119,48 @@ app.post('/api/auth/login', async (req, res) => {
     return item.active && [username, normalizeLoginIdentifier(item.email), normalizeLoginIdentifier(item.name)].includes(identifier);
   });
 
-  if (!user || (user.password || '123456') !== password) {
+  if (!user || !verifyPassword(password, user.password)) {
+    registerFailedAuthentication(req);
     return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
   }
 
+  if (needsPasswordUpgrade(user.password)) user.password = hashPassword(password);
   user.lastLoginAt = new Date().toISOString();
   await saveDb(db);
-  res.json(user);
+  clearAuthenticationAttempts(req);
+  res.json({ user: toSafeUser(user), token: createSessionToken(user.id, getSessionSecret()) });
 });
 
 // O formulário de recuperação confirma o e-mail cadastrado antes de registrar a nova senha.
 app.post('/api/auth/reset-password', async (req, res) => {
+  if (!canAttemptAuthentication(req)) {
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.' });
+  }
   const email = normalizeLoginIdentifier(req.body.email);
   const password = String(req.body.password || '');
+  const actor = getReqUser(req);
 
-  if (!email || !password || password.length < 6) {
-    return res.status(400).json({ error: 'Informe o e-mail cadastrado e uma nova senha com pelo menos 6 caracteres.' });
+  const passwordError = validatePassword(password);
+  if (!email || passwordError) {
+    return res.status(400).json({ error: passwordError || 'Informe o e-mail cadastrado.' });
   }
 
   const db = await getDb();
-  const user = db.users.find((item) => normalizeLoginIdentifier(item.email) === email && item.active);
+  const user = db.users.find((item) => item.id === actor.id && normalizeLoginIdentifier(item.email) === email && item.active);
   if (!user) {
     return res.status(404).json({ error: 'Não encontramos um colaborador ativo com este e-mail.' });
   }
 
-  user.password = password;
+  user.password = hashPassword(password);
   await saveDb(db);
   await addAuditLog(user.id, user.name, 'Redefiniu a senha pelo formulário de recuperação', 'Usuário', user.id);
+  clearAuthenticationAttempts(req);
   res.status(204).send();
 });
 
-// Helper: Get active user from request header (to simulate authenticating user)
-async function getReqUser(req: express.Request) {
-  const userId = req.headers['x-user-id'] as string || 'user-3'; // Default to Lucas Lima (Operador)
-  const db = await getDb();
-  return db.users.find(u => u.id === userId) || db.users[0];
+function getReqUser(req: express.Request) {
+  if (!req.authUser) throw new Error('UsuÃ¡rio autenticado ausente na requisiÃ§Ã£o.');
+  return req.authUser;
 }
 
 // 1. CALCULATOR UTILITY
@@ -111,11 +204,20 @@ app.get('/api/health', async (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/api/public-config', async (req, res) => {
+  const db = await getDb();
+  res.json({
+    parkingLotConfig: {
+      name: db.parkingLotConfig.name,
+      logoUrl: db.parkingLotConfig.logoUrl
+    }
+  });
+});
+
 app.get('/api/config', async (req, res) => {
   const db = await getDb();
   res.json({
     parkingLotConfig: db.parkingLotConfig,
-    users: db.users,
     vehicleTypes: db.vehicleTypes,
     pricingPlans: db.pricingPlans,
     subscriberPlans: db.subscriberPlans
@@ -253,8 +355,14 @@ app.post('/api/lgpd/anonymize', async (req, res) => {
 
 // 3. USER MANAGEMENT (SWITCHING/SIMULATION)
 app.get('/api/users', async (req, res) => {
+  const actor = getReqUser(req);
   const db = await getDb();
-  res.json(db.users);
+  const users = actor.role === 'operator' ? [actor] : db.users;
+  res.json(users.map(toSafeUser));
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  res.json(toSafeUser(getReqUser(req)));
 });
 
 app.post('/api/users', async (req, res) => {
@@ -268,8 +376,9 @@ app.post('/api/users', async (req, res) => {
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
   }
-  if (password?.trim() && password.trim().length < 6) {
-    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
+  const passwordError = validatePassword(String(password || '').trim());
+  if (!password?.trim() || passwordError) {
+    return res.status(400).json({ error: passwordError || 'Defina uma senha inicial para o novo usuÃ¡rio.' });
   }
   if (db.users.some(user => user.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
@@ -284,7 +393,7 @@ app.post('/api/users', async (req, res) => {
     name: name.trim(),
     email: email.trim().toLowerCase(),
     username: cleanUsername,
-    password: password?.trim() || '123456',
+    password: hashPassword(password.trim()),
     role,
     active: true,
     createdAt: new Date().toISOString()
@@ -294,7 +403,7 @@ app.post('/api/users', async (req, res) => {
   await saveDb(db);
   
   await addAuditLog(actor.id, actor.name, `Criou Usuário: ${name}`, 'Usuário', newUser.id, null, newUser);
-  res.json(newUser);
+  res.json(toSafeUser(newUser));
 });
 
 app.put('/api/users/:id', async (req, res) => {
@@ -313,8 +422,9 @@ app.put('/api/users/:id', async (req, res) => {
   if (!name?.trim() || !email?.trim() || !['admin', 'manager', 'operator'].includes(role)) {
     return res.status(400).json({ error: 'Informe nome, e-mail e perfil válidos.' });
   }
-  if (password?.trim() && password.trim().length < 6) {
-    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
+  const passwordError = password?.trim() ? validatePassword(password.trim()) : null;
+  if (passwordError) {
+    return res.status(400).json({ error: passwordError });
   }
   if (userToEdit.id === actor.id && active === false) {
     return res.status(400).json({ error: 'Você não pode desativar o próprio acesso.' });
@@ -335,14 +445,14 @@ app.put('/api/users/:id', async (req, res) => {
     name: name.trim(),
     email: email.trim().toLowerCase(),
     username: cleanUsername,
-    ...(password?.trim() ? { password: password.trim() } : {}),
+    ...(password?.trim() ? { password: hashPassword(password.trim()) } : {}),
     role,
     active: active !== false
   });
   await saveDb(db);
   
   await addAuditLog(actor.id, actor.name, `Editou Usuário: ${userToEdit.name}`, 'Usuário', userToEdit.id, oldUser, userToEdit);
-  res.json(userToEdit);
+  res.json(toSafeUser(userToEdit));
 });
 
 app.delete('/api/users/:id', async (req, res) => {
@@ -443,8 +553,8 @@ app.post('/api/parking/entry', async (req, res) => {
   // Find applicable pricing plan
   const pricingPlan = db.pricingPlans.find(p => p.vehicleTypeId === vehicleTypeId && p.active);
   
-  const ticketNumber = `TKT-${Math.floor(10000 + Math.random() * 90000)}`;
-  const publicToken = Math.random().toString(36).substr(2, 8);
+  const ticketNumber = `TKT-${randomInt(10000, 100000)}`;
+  const publicToken = randomBytes(18).toString('base64url');
   
   const newSession: ParkingSession = {
     id: `session-${Date.now()}`,

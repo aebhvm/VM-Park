@@ -4,7 +4,6 @@ import {
   Trash2, ShieldAlert, Plus, Calendar, FileText, Info, RefreshCw, X, Pencil, Download
 } from 'lucide-react';
 import { api } from '../lib/api';
-import * as XLSX from 'xlsx';
 import {
   formatCpfCnpj,
   formatCurrencyInput,
@@ -151,14 +150,22 @@ export default function AdminConfig({
       Justificativa: log.reason || '',
       Identificador: log.entityId || ''
     }));
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(reportRows);
-    worksheet['!cols'] = [
-      { wch: 13 }, { wch: 12 }, { wch: 26 }, { wch: 42 },
-      { wch: 18 }, { wch: 56 }, { wch: 18 }
-    ];
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Auditoria');
-    XLSX.writeFile(workbook, `relatorio-auditoria-${auditStartDate || 'inicio'}-a-${auditEndDate || 'fim'}.xlsx`);
+    const headers = Object.keys(reportRows[0] || {});
+    const escapeXml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+    const toRow = (values: unknown[]) => `<Row>${values.map(value => `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`).join('')}</Row>`;
+    const workbookXml = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Auditoria"><Table>${toRow(headers)}${reportRows.map(row => toRow(headers.map(header => row[header as keyof typeof row]))).join('')}</Table></Worksheet></Workbook>`;
+    const blob = new Blob([workbookXml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `relatorio-auditoria-${auditStartDate || 'inicio'}-a-${auditEndDate || 'fim'}.xls`;
+    link.click();
+    URL.revokeObjectURL(downloadUrl);
   };
 
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -348,8 +355,8 @@ export default function AdminConfig({
       setUserError('Preencha o nome, e-mail e senha do colaborador.');
       return;
     }
-    if (newUserPassword && newUserPassword.length < 6) {
-      setUserError('A senha deve ter pelo menos 6 caracteres.');
+    if (newUserPassword && newUserPassword.length < 8) {
+      setUserError('A senha deve ter pelo menos 8 caracteres.');
       return;
     }
 
@@ -1372,8 +1379,8 @@ export default function AdminConfig({
                         type="password"
                         value={newUserPassword}
                         onChange={(e) => setNewUserPassword(e.target.value)}
-                        placeholder={editingUser ? 'DEIXE EM BRANCO PARA MANTER A SENHA' : 'MÍNIMO DE 6 CARACTERES'}
-                        minLength={newUserPassword ? 6 : undefined}
+                        placeholder={editingUser ? 'DEIXE EM BRANCO PARA MANTER A SENHA' : 'MÍNIMO DE 8 CARACTERES'}
+                        minLength={newUserPassword ? 8 : undefined}
                         required={!editingUser}
                         autoComplete="new-password"
                         className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-app-muted/30"

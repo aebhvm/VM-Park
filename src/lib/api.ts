@@ -3,19 +3,26 @@ import {
   Subscriber, Expense, AuditLog, User
 } from '../types';
 
-// Simple simulated auth header
-export function getActiveUserId(): string {
-  return localStorage.getItem('activeUserId') || 'user-3'; // Default to Lucas Lima (Operador)
+export interface AuthSession {
+  user: User;
+  token: string;
 }
 
-export function setActiveUserId(id: string) {
-  localStorage.setItem('activeUserId', id);
+const SESSION_STORAGE_KEY = 'parkgestor-session-token';
+
+export function hasActiveSession(): boolean {
+  return Boolean(localStorage.getItem(SESSION_STORAGE_KEY));
+}
+
+export function clearActiveSession() {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
-  headers.set('X-User-Id', getActiveUserId());
+  const sessionToken = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
   
   const response = await fetch(url, {
     ...options,
@@ -33,10 +40,16 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  login: (identifier: string, password: string) => request<User>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ identifier, password })
-  }),
+  login: async (identifier: string, password: string) => {
+    const session = await request<AuthSession>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password })
+    });
+    localStorage.setItem(SESSION_STORAGE_KEY, session.token);
+    return session.user;
+  },
+  getPublicConfig: () => request<{ parkingLotConfig: Pick<any, 'name' | 'logoUrl'> }>('/api/public-config'),
+  getCurrentUser: () => request<User>('/api/auth/me'),
   resetPassword: (email: string, password: string) => request<void>('/api/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify({ email, password })

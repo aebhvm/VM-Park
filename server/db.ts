@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { hashPassword, sanitizeAuditData, validatePassword } from './auth.js';
 import type {
   User, VehicleType, PricingPlan, ParkingSession, 
   SubscriberPlan, Subscriber, CashSession, 
@@ -46,39 +47,28 @@ export interface DatabaseSchema {
   };
 }
 
+function getInitialAdmin(): User[] {
+  const email = String(process.env.INITIAL_ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.INITIAL_ADMIN_PASSWORD || '');
+  if (!email || !password) return [];
+
+  const passwordError = validatePassword(password);
+  if (passwordError) throw new Error(`INITIAL_ADMIN_PASSWORD invÃ¡lida: ${passwordError}`);
+
+  return [{
+    id: 'user-initial-admin',
+    name: String(process.env.INITIAL_ADMIN_NAME || 'Administrador').trim(),
+    email,
+    username: email.split('@')[0],
+    password: hashPassword(password),
+    role: 'admin',
+    active: true,
+    createdAt: new Date().toISOString()
+  }];
+}
+
 const defaultData: DatabaseSchema = {
-  users: [
-    {
-      id: 'user-1',
-      name: 'Carlos Alberto (Admin)',
-      email: 'admin@parkgestor.com.br',
-      username: 'admin',
-      password: '123456',
-      role: 'admin',
-      active: true,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'user-2',
-      name: 'Renata Souza (Gerente)',
-      email: 'gerente@parkgestor.com.br',
-      username: 'gerente',
-      password: '123456',
-      role: 'manager',
-      active: true,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'user-3',
-      name: 'Lucas Lima (Operador)',
-      email: 'operador@parkgestor.com.br',
-      username: 'operador',
-      password: '123456',
-      role: 'operator',
-      active: true,
-      createdAt: new Date().toISOString()
-    }
-  ],
+  users: getInitialAdmin(),
   vehicleTypes: [
     { id: 'type-1', name: 'Carro', icon: 'car', totalSpaces: 50, active: true },
     { id: 'type-2', name: 'Moto', icon: 'bike', totalSpaces: 30, active: true },
@@ -361,7 +351,26 @@ export async function getDb(): Promise<DatabaseSchema> {
   const sql = getSql();
   const rows = await sql`SELECT data FROM app_state WHERE id = ${STATE_ID}`;
   if (rows.length > 0) {
-    return rows[0].data as DatabaseSchema;
+    const data = rows[0].data as DatabaseSchema;
+    let changed = false;
+    for (const log of data.auditLogs) {
+      for (const key of ['previousData', 'newData'] as const) {
+        const value = log[key];
+        if (!value || !value.includes('password')) continue;
+        try {
+          const sanitized = JSON.stringify(sanitizeAuditData(JSON.parse(value)));
+          if (sanitized !== value) {
+            log[key] = sanitized;
+            changed = true;
+          }
+        } catch {
+          log[key] = undefined;
+          changed = true;
+        }
+      }
+    }
+    if (changed) await saveDb(data);
+    return data;
   }
 
   await sql`
@@ -394,8 +403,8 @@ export async function addAuditLog(userId: string, userName: string, action: stri
     action,
     entityType,
     entityId,
-    previousData: previousData ? JSON.stringify(previousData) : undefined,
-    newData: newData ? JSON.stringify(newData) : undefined,
+    previousData: previousData ? JSON.stringify(sanitizeAuditData(previousData)) : undefined,
+    newData: newData ? JSON.stringify(sanitizeAuditData(newData)) : undefined,
     reason,
     createdAt: new Date().toISOString()
   };
