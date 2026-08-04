@@ -1,0 +1,19 @@
+{
+  "name": "VM Parking",
+  "short_name": "VM Parking",
+  "description": "Sistema de gestão para estacionamento",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1E4E44",
+  "icons": [
+    {
+      "src": "/vm-park-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
