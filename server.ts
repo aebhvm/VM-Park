@@ -180,7 +180,11 @@ function calculateParkingAmount(entryAtStr: string, exitAtStr: string, plan: Pri
   
   let amount = 0;
   if (plan.pricingType === 'hourly') {
-    const hours = Math.ceil(diffMinutes / 60);
+    // A hora quebrada só vira uma nova hora após a tolerância configurada.
+    // Ex.: com 15 min, 1h15 cobra 1h e 1h16 cobra 2h.
+    const fullHours = Math.floor(diffMinutes / 60);
+    const remainingMinutes = diffMinutes % 60;
+    const hours = fullHours + (remainingMinutes > plan.toleranceMinutes ? 1 : 0);
     amount = hours * plan.hourlyRate;
   } else if (plan.pricingType === 'fractional') {
     const fraction = plan.fractionMinutes || 15;

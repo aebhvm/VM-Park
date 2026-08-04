@@ -599,7 +599,7 @@ export default function AdminConfig({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA (MINUTOS)</label>
+                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA POR HORA (MINUTOS)</label>
                       <input
                         type="number"
                         value={carTolerance}
@@ -636,7 +636,7 @@ export default function AdminConfig({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA (MINUTOS)</label>
+                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA POR HORA (MINUTOS)</label>
                       <input
                         type="number"
                         value={motoTolerance}
@@ -673,7 +673,7 @@ export default function AdminConfig({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA (MINUTOS)</label>
+                      <label className="text-[8px] font-bold text-app-muted uppercase tracking-wider block">TOLERÂNCIA POR HORA (MINUTOS)</label>
                       <input
                         type="number"
                         value={truckTolerance}
