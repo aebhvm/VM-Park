@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Car, Plus, ClipboardCheck, ArrowRight,
+  Plus,
   CheckCircle2, AlertCircle, Info, RefreshCw, MessageCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -16,6 +16,13 @@ interface NewEntryProps {
   onSuccess: () => void;
   cashStatus: any;
   setCurrentTab: (tab: string) => void;
+}
+
+function getVehicleImage(vehicleTypeName?: string): string {
+  const type = vehicleTypeName?.toLocaleLowerCase('pt-BR') || '';
+  if (type.includes('moto') || type.includes('bike')) return '/vehicle-moto.png';
+  if (type.includes('camin') || type.includes('van') || type.includes('truck')) return '/vehicle-pickup.png';
+  return '/vehicle-car.png';
 }
 
 export default function NewEntry({
@@ -368,14 +375,24 @@ Conserve este ticket para a saída.
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setSelectedTypeId(t.id)}
+                  onClick={() => {
+                    setSelectedTypeId(t.id);
+                    setBrand('');
+                    setModel('');
+                  }}
                   className={`flex flex-col items-center justify-center p-2 rounded border transition cursor-pointer uppercase ${
                     selected 
                       ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold' 
                       : 'border-app-border bg-app-bg text-app-muted hover:text-app-text'
                   }`}
                 >
-                  <Car className={`w-4 h-4 mb-1 ${selected ? 'text-indigo-500' : 'text-app-muted'}`} />
+                  <img
+                    src={getVehicleImage(t.name)}
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                    className={`h-9 w-16 object-contain rounded bg-white/80 p-0.5 mb-1 transition ${selected ? 'ring-1 ring-indigo-400/50' : 'opacity-80'}`}
+                  />
                   <span className="text-[9px] font-bold">{t.name}</span>
                 </button>
               );
@@ -413,7 +430,7 @@ Conserve este ticket para a saída.
               className="w-full bg-app-bg border border-app-border text-app-text rounded px-2 py-1.5 text-[10px] focus:outline-none focus:border-indigo-500 uppercase placeholder-app-muted/30"
             />
             <datalist id="vehicle-model-options">
-              {getModelsForBrand(brand).map(vehicleModel => <option key={vehicleModel} value={vehicleModel} />)}
+              {getModelsForBrand(brand, vehicleTypes.find(type => type.id === selectedTypeId)?.name).map(vehicleModel => <option key={vehicleModel} value={vehicleModel} />)}
             </datalist>
           </div>
           <div className="space-y-1">
