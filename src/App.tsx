@@ -3,6 +3,7 @@ import { api, clearActiveSession, hasActiveSession } from './lib/api';
 import { User, VehicleType, ParkingSession, SubscriberPlan, Subscriber, CashSession, Expense, AuditLog } from './types';
 import Navigation from './components/Navigation';
 import { RefreshCw, AlertCircle } from 'lucide-react';
+import PublicTicket from './components/PublicTicket';
 
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const NewEntry = lazy(() => import('./components/NewEntry'));
@@ -17,6 +18,7 @@ function ScreenLoader() {
 }
 
 export default function App() {
+  const isPublicTicketPage = window.location.pathname.startsWith('/ticket/');
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [theme, setTheme] = useState<'light' | 'obsidian' | 'cyber'>(() => {
     return (localStorage.getItem('parkgestor-theme') as 'light' | 'obsidian' | 'cyber') || 'light';
@@ -115,6 +117,7 @@ export default function App() {
 
   // Trigger loading on mount
   useEffect(() => {
+    if (isPublicTicketPage) return;
     loadInitialData();
   }, []);
 
@@ -149,6 +152,8 @@ export default function App() {
     setUsers([]);
     setCurrentTab('dashboard');
   };
+
+  if (isPublicTicketPage) return <PublicTicket />;
 
   // Loading Screen Layout
   if (loading && !config) {

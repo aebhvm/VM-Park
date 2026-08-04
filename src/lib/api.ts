@@ -49,6 +49,23 @@ export const api = {
     return session.user;
   },
   getPublicConfig: () => request<{ parkingLotConfig: Pick<any, 'name' | 'logoUrl'> }>('/api/public-config'),
+  getPublicTicket: (token: string) => request<{
+    parkingLot: { name: string; logoUrl?: string };
+    ticket: {
+      ticketNumber: string;
+      displayPlate: string;
+      vehicleTypeId: string;
+      entryType: ParkingSession['entryType'];
+      entryAt: string;
+      exitAt?: string;
+      status: ParkingSession['status'];
+      elapsedMinutes: number;
+      amount: number;
+      pricingPlanName?: string;
+      hourlyRate?: number;
+      updatedAt: string;
+    };
+  }>(`/api/public/ticket/${encodeURIComponent(token)}`),
   getCurrentUser: () => request<User>('/api/auth/me'),
   resetPassword: (email: string, password: string) => request<void>('/api/auth/reset-password', {
     method: 'POST',

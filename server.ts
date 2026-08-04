@@ -87,7 +87,7 @@ declare global {
 const publicApiPaths = new Set(['/health', '/public-config', '/auth/login']);
 
 app.use('/api', async (req, res, next) => {
-  if (publicApiPaths.has(req.path)) return next();
+  if (publicApiPaths.has(req.path) || req.path.startsWith('/public/ticket/')) return next();
   const authorization = req.headers.authorization;
   const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined;
   const userId = getSessionUserId(token, getSessionSecret());
@@ -210,6 +210,54 @@ app.get('/api/public-config', async (req, res) => {
     parkingLotConfig: {
       name: db.parkingLotConfig.name,
       logoUrl: db.parkingLotConfig.logoUrl
+    }
+  });
+});
+
+// Consulta pública vinculada ao QR Code do ticket. Retorna apenas os dados
+// necessários ao cliente e calcula a permanência usando o horário da leitura.
+app.get('/api/public/ticket/:token', async (req, res) => {
+  const token = String(req.params.token || '');
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(token)) {
+    return res.status(404).json({ error: 'Comprovante não encontrado.' });
+  }
+
+  const db = await getDb();
+  const session = db.parkingSessions.find(item => item.publicToken === token);
+  if (!session) return res.status(404).json({ error: 'Comprovante não encontrado.' });
+
+  const referenceAt = session.status === 'active'
+    ? new Date().toISOString()
+    : session.exitAt || session.updatedAt || new Date().toISOString();
+  const elapsedMinutes = Math.max(0, Math.ceil(
+    (new Date(referenceAt).getTime() - new Date(session.entryAt).getTime()) / (60 * 1000)
+  ));
+
+  let amount = session.status === 'completed' ? session.finalAmount : 0;
+  let pricingPlan: PricingPlan | undefined;
+  if (session.entryType !== 'mensalista' && session.entryType !== 'cortesia' && session.status !== 'cancelled') {
+    pricingPlan = db.pricingPlans.find(plan => plan.vehicleTypeId === session.vehicleTypeId && plan.active);
+    if (pricingPlan) amount = calculateParkingAmount(session.entryAt, referenceAt, pricingPlan);
+  }
+
+  res.json({
+    parkingLot: {
+      name: db.parkingLotConfig.name,
+      logoUrl: db.parkingLotConfig.logoUrl
+    },
+    ticket: {
+      ticketNumber: session.ticketNumber,
+      displayPlate: session.displayPlate,
+      vehicleTypeId: session.vehicleTypeId,
+      entryType: session.entryType,
+      entryAt: session.entryAt,
+      exitAt: session.exitAt,
+      status: session.status,
+      elapsedMinutes,
+      amount,
+      pricingPlanName: pricingPlan?.name,
+      hourlyRate: pricingPlan?.hourlyRate,
+      updatedAt: referenceAt
     }
   });
 });

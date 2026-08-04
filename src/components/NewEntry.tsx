@@ -154,20 +154,14 @@ VEÍCULO: ${[ticket.brand, ticket.model].filter(Boolean).join(' ') || 'Não info
 ENTRADA: ${new Date(ticket.entryAt).toLocaleDateString('pt-BR')} ${new Date(ticket.entryAt).toLocaleTimeString('pt-BR')}
 VAGA: ${ticket.vaga || 'Livre'}
 TIPO: ${ticket.entryType.toUpperCase()}
+CONSULTA ONLINE: ${buildPublicTicketUrl(ticket)}
 ----------------------------
 Conserve este ticket para a saída.
     `.trim();
 
-  const buildQrPayload = (ticket: any) => JSON.stringify({
-    ticket: ticket.ticketNumber,
-    placa: formatPlate(ticket.displayPlate),
-    marca: ticket.brand || undefined,
-    modelo: ticket.model || undefined,
-    entrada: ticket.entryAt,
-    vaga: ticket.vaga || undefined,
-    modalidade: ticket.entryType,
-    token: ticket.publicToken
-  });
+  const buildPublicTicketUrl = (ticket: any) => `${window.location.origin}/ticket/${encodeURIComponent(ticket.publicToken)}`;
+
+  const buildQrPayload = (ticket: any) => buildPublicTicketUrl(ticket);
 
   const resetForm = () => {
     setPlate('');
@@ -251,7 +245,7 @@ Conserve este ticket para a saída.
               <div className="bg-white p-1.5 rounded border border-app-border">
                 <QRCodeSVG value={buildQrPayload(createdTicket)} size={84} level="M" includeMargin={false} />
               </div>
-              <p className="text-[8px] text-app-subtle font-mono uppercase text-center">QR com os dados do ticket</p>
+              <p className="text-[8px] text-app-subtle font-mono uppercase text-center">QR para consultar tempo e valor atualizados</p>
             </div>
           </div>
 

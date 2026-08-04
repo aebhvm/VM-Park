@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { formatBRL, formatCurrencyInput, formatCurrencyValue, formatPlate, normalizePhone, normalizeSearchText, parseCurrency } from '../lib/masks';
 import { ParkingSession, VehicleType } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ActiveSessionsProps {
   sessions: ParkingSession[];
@@ -114,6 +115,8 @@ export default function ActiveSessions({
     }
   };
 
+  const buildPublicTicketUrl = (ticket: ParkingSession) => `${window.location.origin}/ticket/${encodeURIComponent(ticket.publicToken)}`;
+
   const buildExitReceiptText = (ticket: ParkingSession) => `
 ----------------------------
   PARKGESTOR - COMPROVANTE
@@ -125,6 +128,7 @@ ENTRADA: ${new Date(ticket.entryAt).toLocaleString('pt-BR')}
 SAÍDA: ${ticket.exitAt ? new Date(ticket.exitAt).toLocaleString('pt-BR') : 'Em processamento'}
 VALOR RECEBIDO: ${formatBRL(ticket.finalAmount)}
 PAGAMENTO: ${(ticket.paymentMethod || '').toUpperCase()}
+CONSULTA ONLINE: ${buildPublicTicketUrl(ticket)}
 ----------------------------
 Obrigado pela preferência.
   `.trim();
@@ -438,21 +442,17 @@ Obrigado pela preferência.
                 <p className="flex justify-between"><span>VAGA:</span> <strong className="text-app-text">{ticketModalSession.vaga ? ticketModalSession.vaga.toUpperCase() : 'LIVRE'}</strong></p>
               </div>
 
-              {/* Simulated QR Code */}
+              {/* QR Code público com consulta dinâmica de tempo e valor */}
               <div className="flex flex-col items-center justify-center py-2.5 gap-1 bg-app-card p-2 rounded border border-app-border">
-                <div className="w-20 h-20 bg-app-bg rounded p-1 flex flex-wrap border border-app-border">
-                  {Array.from({ length: 16 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className={`w-1/4 h-1/4 ${
-                        (i % 2 === 1 && i % 3 === 0) || i === 0 || i === 3 || i === 12 || i === 15 
-                          ? 'bg-indigo-500' 
-                          : 'bg-transparent'
-                      }`} 
-                    />
-                  ))}
+                <div className="rounded border border-app-border bg-white p-1.5">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/ticket/${encodeURIComponent(ticketModalSession.publicToken)}`}
+                    size={84}
+                    level="M"
+                    includeMargin={false}
+                  />
                 </div>
-                <span className="text-[7px] text-app-subtle uppercase">TOKEN: {ticketModalSession.publicToken}</span>
+                <span className="text-center text-[7px] text-app-subtle uppercase">Escaneie para ver tempo e valor atualizados</span>
               </div>
             </div>
             <div className="p-2.5 bg-app-card border-t border-app-border flex gap-2">
