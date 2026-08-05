@@ -10,10 +10,10 @@
   "theme_color": "#1E4E44",
   "icons": [
     {
-      "src": "/vm-park-logo.png",
-      "sizes": "any",
+      "src": "/pwa-icon.png",
+      "sizes": "1024x1024",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

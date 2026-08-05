@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 
-const INSTALL_PROMPT_SEEN_KEY = 'parkgestor-install-prompt-seen';
+const INSTALL_PROMPT_SEEN_KEY = 'parkgestor-install-prompt-seen-v2';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -95,7 +95,8 @@ export default function InstallPrompt() {
       </div>
       {showInstructions && (
         <div className="mt-3 rounded-xl border border-app-border bg-app-bg p-2.5 text-[10px] leading-relaxed text-app-muted">
-          <p><strong className="text-app-text">Android/Chrome:</strong> abra o menu do navegador e escolha <strong className="text-app-text">Instalar VM Parking</strong> ou <strong className="text-app-text">Adicionar à tela inicial</strong>.</p>
+          <p><strong className="text-app-text">PC (Chrome/Edge):</strong> abra o menu ⋮ do navegador e escolha <strong className="text-app-text">Instalar VM Parking</strong>. Se essa opção não aparecer, use o ícone de instalação na barra de endereço.</p>
+          <p className="mt-1"><strong className="text-app-text">Android:</strong> abra o menu do navegador e escolha <strong className="text-app-text">Instalar VM Parking</strong> ou <strong className="text-app-text">Adicionar à tela inicial</strong>.</p>
           <p className="mt-1"><strong className="text-app-text">iPhone/iPad:</strong> toque em Compartilhar e depois em <strong className="text-app-text">Adicionar à Tela de Início</strong>.</p>
         </div>
       )}

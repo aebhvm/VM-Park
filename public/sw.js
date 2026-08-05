@@ -1,5 +1,5 @@
-const CACHE_NAME = 'parkgestor-shell-v1';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/vm-park-logo.png'];
+const CACHE_NAME = 'parkgestor-shell-v2';
+const APP_SHELL = ['/', '/manifest.webmanifest', '/vm-park-logo.png', '/pwa-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
