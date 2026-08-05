@@ -342,13 +342,36 @@ app.put('/api/subscriber-plans', async (req, res) => {
   }
   
   const oldPlan = { ...db.subscriberPlans[planIndex] };
+  const nextAmount = amount !== undefined ? Number(amount) : db.subscriberPlans[planIndex].amount;
+  const nextDurationMonths = durationMonths !== undefined ? Number(durationMonths) : db.subscriberPlans[planIndex].durationMonths;
+  const nextSimultaneousLimit = simultaneousLimit !== undefined ? Number(simultaneousLimit) : db.subscriberPlans[planIndex].simultaneousLimit;
+  if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+    return res.status(400).json({ error: 'O valor mensal deve ser maior que zero.' });
+  }
+  if (!Number.isInteger(nextDurationMonths) || nextDurationMonths < 1) {
+    return res.status(400).json({ error: 'A duração do plano deve ser de pelo menos 1 mês.' });
+  }
+  if (!Number.isInteger(nextSimultaneousLimit) || nextSimultaneousLimit < 1) {
+    return res.status(400).json({ error: 'O limite de veículos deve ser de pelo menos 1.' });
+  }
+
   db.subscriberPlans[planIndex] = {
     ...db.subscriberPlans[planIndex],
-    amount: amount !== undefined ? parseFloat(amount) : db.subscriberPlans[planIndex].amount,
-    durationMonths: durationMonths !== undefined ? parseInt(durationMonths, 10) : db.subscriberPlans[planIndex].durationMonths,
-    simultaneousLimit: simultaneousLimit !== undefined ? parseInt(simultaneousLimit, 10) : db.subscriberPlans[planIndex].simultaneousLimit,
+    amount: nextAmount,
+    durationMonths: nextDurationMonths,
+    simultaneousLimit: nextSimultaneousLimit,
     active: active !== undefined ? !!active : db.subscriberPlans[planIndex].active
   };
+
+  // O valor configurado no plano é a fonte de verdade para os mensalistas
+  // vinculados. Assim, uma alteração de preço também vale no próximo pagamento.
+  const planUpdatedAt = new Date().toISOString();
+  for (const subscriber of db.subscribers) {
+    if (subscriber.planId === id && !subscriber.deletedAt) {
+      subscriber.amount = nextAmount;
+      subscriber.updatedAt = planUpdatedAt;
+    }
+  }
   await saveDb(db);
   
   await addAuditLog(user.id, user.name, `Atualizou Plano Mensalista - ${db.subscriberPlans[planIndex].name}`, 'Planos', id, oldPlan, db.subscriberPlans[planIndex]);
@@ -925,14 +948,17 @@ app.post('/api/subscribers', async (req, res) => {
   const user = await getReqUser(req);
   const db = await getDb();
   const { name, document, phone, email, planId, plates, dueDay, notes } = req.body;
+  const cleanName = String(name || '').trim();
+  const cleanEmail = String(email || '').trim();
+  const cleanDueDay = Number(dueDay || 10);
   
-  if (!name || !phone || !planId || !plates || plates.length === 0) {
+  if (!cleanName || !phone || !planId || !Array.isArray(plates) || plates.length === 0) {
     return res.status(400).json({ error: 'Nome, Telefone, Plano e Placas são obrigatórios.' });
   }
 
   const normalizedPhone = normalizePhone(phone);
   const normalizedDocument = normalizeDocument(document);
-  const normalizedPlates = plates.map((plateValue: string) => normalizePlate(plateValue));
+  const normalizedPlates = plates.map((plateValue: string) => normalizePlate(plateValue)).filter(Boolean);
   if (normalizedPhone.length !== 10 && normalizedPhone.length !== 11) {
     return res.status(400).json({ error: 'Informe um telefone com DDD válido.' });
   }
@@ -943,9 +969,15 @@ app.post('/api/subscribers', async (req, res) => {
     return res.status(400).json({ error: 'Informe placas válidas nos formatos ABC-1234 ou ABC1D23.' });
   }
   
+  if (!Number.isInteger(cleanDueDay) || cleanDueDay < 1 || cleanDueDay > 28) {
+    return res.status(400).json({ error: 'O dia de vencimento deve ficar entre 1 e 28.' });
+  }
+
   const plan = db.subscriberPlans.find(p => p.id === planId);
   if (!plan) return res.status(404).json({ error: 'Plano não encontrado.' });
   
+  if (!plan.active) return res.status(400).json({ error: 'O plano selecionado está inativo. Escolha um plano ativo.' });
+
   const startsAt = new Date().toISOString();
   // Expire in 'plan.durationMonths' months
   const expiresDate = new Date();
@@ -954,14 +986,14 @@ app.post('/api/subscribers', async (req, res) => {
   
   const newSubscriber: Subscriber = {
     id: `sub-${Date.now()}`,
-    name,
+    name: cleanName,
     document: normalizedDocument,
     phone: normalizedPhone,
-    email: email || '',
+    email: cleanEmail,
     planId,
     startsAt,
     expiresAt,
-    dueDay: parseInt(dueDay || 10),
+    dueDay: cleanDueDay,
     status: 'active',
     amount: plan.amount,
     plates: normalizedPlates,
@@ -1056,12 +1088,17 @@ app.post('/api/subscribers/:id/pay', async (req, res) => {
     ? new Date(sub.expiresAt) 
     : new Date();
     
-  const plan = db.subscriberPlans.find(p => p.id === sub.planId);
-  const duration = plan ? plan.durationMonths : 1;
+  const plan = db.subscriberPlans.find(p => p.id === sub.planId && p.active);
+  if (!plan) {
+    return res.status(400).json({ error: 'O plano atual do mensalista está inativo ou não foi encontrado.' });
+  }
+  const duration = plan.durationMonths;
+  const currentAmount = plan.amount;
   baseDate.setMonth(baseDate.getMonth() + duration);
   
   sub.expiresAt = baseDate.toISOString();
   sub.status = 'active';
+  sub.amount = currentAmount;
   sub.updatedAt = new Date().toISOString();
   
   // Record Transaction
@@ -1071,7 +1108,7 @@ app.post('/api/subscribers/:id/pay', async (req, res) => {
     subscriberId: sub.id,
     type: 'recebimento_mensalidade',
     category: 'Mensalidade',
-    amount: sub.amount,
+    amount: currentAmount,
     paymentMethod,
     description: `Recebimento Mensalidade de ${sub.name}`,
     userId: user.id,
@@ -1080,7 +1117,7 @@ app.post('/api/subscribers/:id/pay', async (req, res) => {
   };
   
   db.transactions.push(transaction);
-  activeCash.expectedClosingBalance += sub.amount;
+  activeCash.expectedClosingBalance += currentAmount;
   
   await saveDb(db);
   

@@ -24,10 +24,15 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const sessionToken = localStorage.getItem(SESSION_STORAGE_KEY);
   if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
   
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers
+    });
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.');
+  }
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

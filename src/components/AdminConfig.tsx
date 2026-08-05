@@ -224,36 +224,36 @@ export default function AdminConfig({
     setTariffsError(null);
     setTariffsSuccess(false);
     try {
-      await Promise.all([
-        api.updatePricingPlan({
-          id: 'plan-car',
-          hourlyRate: parseCurrency(carHourly),
-          toleranceMinutes: parseInt(carTolerance, 10),
-          dailyMax: parseCurrency(carDailyMax)
-        }),
-        api.updatePricingPlan({
-          id: 'plan-moto',
-          hourlyRate: parseCurrency(motoHourly),
-          toleranceMinutes: parseInt(motoTolerance, 10),
-          dailyMax: parseCurrency(motoDailyMax)
-        }),
-        api.updatePricingPlan({
-          id: 'plan-truck',
-          hourlyRate: parseCurrency(truckHourly),
-          toleranceMinutes: parseInt(truckTolerance, 10),
-          dailyMax: parseCurrency(truckDailyMax)
-        }),
-        api.updateSubscriberPlan({
-          id: 'sub-plan-car',
-          amount: parseCurrency(subCarAmount),
-          simultaneousLimit: parseInt(subCarLimit, 10)
-        }),
-        api.updateSubscriberPlan({
-          id: 'sub-plan-moto',
-          amount: parseCurrency(subMotoAmount),
-          simultaneousLimit: parseInt(subMotoLimit, 10)
-        })
-      ]);
+      // Cada endpoint salva o estado completo do banco. As atualizações precisam
+      // ser sequenciais para uma gravação não sobrescrever a anterior.
+      await api.updatePricingPlan({
+        id: 'plan-car',
+        hourlyRate: parseCurrency(carHourly),
+        toleranceMinutes: parseInt(carTolerance, 10),
+        dailyMax: parseCurrency(carDailyMax)
+      });
+      await api.updatePricingPlan({
+        id: 'plan-moto',
+        hourlyRate: parseCurrency(motoHourly),
+        toleranceMinutes: parseInt(motoTolerance, 10),
+        dailyMax: parseCurrency(motoDailyMax)
+      });
+      await api.updatePricingPlan({
+        id: 'plan-truck',
+        hourlyRate: parseCurrency(truckHourly),
+        toleranceMinutes: parseInt(truckTolerance, 10),
+        dailyMax: parseCurrency(truckDailyMax)
+      });
+      await api.updateSubscriberPlan({
+        id: 'sub-plan-car',
+        amount: parseCurrency(subCarAmount),
+        simultaneousLimit: parseInt(subCarLimit, 10)
+      });
+      await api.updateSubscriberPlan({
+        id: 'sub-plan-moto',
+        amount: parseCurrency(subMotoAmount),
+        simultaneousLimit: parseInt(subMotoLimit, 10)
+      });
       setTariffsSuccess(true);
       onRefresh();
       setTimeout(() => setTariffsSuccess(false), 3000);

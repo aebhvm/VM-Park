@@ -89,6 +89,8 @@ export default function Subscribers({
     return matchesQuery && matchesStatus;
   });
 
+  const activeSubscriberPlans = subscriberPlans.filter(plan => plan.active);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
@@ -103,9 +105,8 @@ export default function Subscribers({
   };
 
   const handleOpenCreateModal = () => {
-    if (subscriberPlans.length > 0) {
-      setPlanId(subscriberPlans[0].id);
-    }
+    setPlanId(activeSubscriberPlans[0]?.id || '');
+    setCreateError(activeSubscriberPlans.length > 0 ? null : 'Nenhum plano de mensalista ativo está disponível. Atualize a configuração antes de cadastrar.');
     setCreateModalOpen(true);
   };
 
@@ -135,6 +136,16 @@ export default function Subscribers({
     setCreateLoading(true);
     setCreateError(null);
     try {
+      // Confere a configuração atual antes de gravar para não cadastrar
+      // usando um plano removido, inativo ou com preço desatualizado na tela.
+      const latestConfig = await api.getConfig();
+      const latestPlan = (latestConfig.subscriberPlans || []).find(
+        (plan: SubscriberPlan) => plan.id === planId && plan.active
+      );
+      if (!latestPlan) {
+        throw new Error('O plano selecionado não está mais ativo. Atualize a tela e tente novamente.');
+      }
+
       await api.createSubscriber({
         name,
         document: normalizedDocument,
@@ -488,7 +499,7 @@ export default function Subscribers({
                     className="w-full bg-app-card border border-app-border text-app-text rounded px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 font-bold uppercase"
                     required
                   >
-                    {subscriberPlans.map(p => (
+                    {activeSubscriberPlans.map(p => (
                       <option key={p.id} value={p.id}>{p.name.toUpperCase()} ({formatBRL(p.amount)})</option>
                     ))}
                   </select>

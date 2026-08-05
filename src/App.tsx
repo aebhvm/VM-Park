@@ -124,7 +124,8 @@ export default function App() {
   // Quick action refresh handler to pass to children components
   const refreshStatsAndSessions = async () => {
     try {
-      const [statsData, sessionsData, currentCash, cashSessionsData, subscribersData, expensesData, auditLogsData] = await Promise.all([
+      const [configData, statsData, sessionsData, currentCash, cashSessionsData, subscribersData, expensesData, auditLogsData] = await Promise.all([
+        api.getConfig(),
         api.getDashboardStats(),
         api.getSessions(),
         api.getCashStatus(),
@@ -133,6 +134,7 @@ export default function App() {
         api.getExpenses(),
         currentUser?.role === 'operator' ? Promise.resolve([]) : api.getAuditLogs()
       ]);
+      setConfig(configData);
       setStats(statsData);
       setSessions(sessionsData);
       setCashStatus(currentCash);
