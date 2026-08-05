@@ -16,15 +16,21 @@ function isStandaloneMode() {
 export default function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
     if (window.location.pathname.startsWith('/ticket/') || isStandaloneMode()) return;
     if (localStorage.getItem(INSTALL_PROMPT_SEEN_KEY) === '1') return;
 
+    // O evento nativo pode não existir na primeira renderização.
+    // Mesmo assim, o primeiro acesso deve receber o convite para instalar.
+    setVisible(true);
+
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
       setVisible(true);
+      setShowInstructions(false);
     };
 
     const handleAppInstalled = () => {
@@ -49,15 +55,23 @@ export default function InstallPrompt() {
   };
 
   const install = async () => {
-    if (!installEvent) return;
-    await installEvent.prompt();
-    await installEvent.userChoice;
-    localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, '1');
-    setVisible(false);
-    setInstallEvent(null);
+    if (!installEvent) {
+      setShowInstructions(true);
+      return;
+    }
+
+    try {
+      await installEvent.prompt();
+      await installEvent.userChoice;
+      localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, '1');
+      setVisible(false);
+      setInstallEvent(null);
+    } catch {
+      setShowInstructions(true);
+    }
   };
 
-  if (!visible || !installEvent) return null;
+  if (!visible) return null;
 
   return (
     <div className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-md rounded-2xl border border-indigo-500/30 bg-app-card p-3 shadow-2xl sm:inset-x-auto sm:right-5 sm:w-[380px]">
@@ -68,7 +82,7 @@ export default function InstallPrompt() {
           <p className="mt-1 text-[11px] leading-relaxed text-app-muted">Tenha acesso rápido ao sistema pelo ícone do app.</p>
           <div className="mt-2.5 flex gap-2">
             <button type="button" onClick={() => void install()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-[10px] font-bold uppercase text-white transition hover:bg-indigo-600">
-              <Download className="h-3.5 w-3.5" /> Instalar app
+              <Download className="h-3.5 w-3.5" /> {installEvent ? 'Instalar app' : 'Como instalar'}
             </button>
             <button type="button" onClick={dismiss} className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase text-app-muted hover:bg-app-bg hover:text-app-text">
               Agora não
@@ -79,6 +93,12 @@ export default function InstallPrompt() {
           <X className="h-4 w-4" />
         </button>
       </div>
+      {showInstructions && (
+        <div className="mt-3 rounded-xl border border-app-border bg-app-bg p-2.5 text-[10px] leading-relaxed text-app-muted">
+          <p><strong className="text-app-text">Android/Chrome:</strong> abra o menu do navegador e escolha <strong className="text-app-text">Instalar VM Parking</strong> ou <strong className="text-app-text">Adicionar à tela inicial</strong>.</p>
+          <p className="mt-1"><strong className="text-app-text">iPhone/iPad:</strong> toque em Compartilhar e depois em <strong className="text-app-text">Adicionar à Tela de Início</strong>.</p>
+        </div>
+      )}
     </div>
   );
 }
